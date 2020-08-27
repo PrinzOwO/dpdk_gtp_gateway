@@ -3,8 +3,8 @@
 
 #include <rte_mbuf.h>
 
-#define NB_MBUF             (8192 * 2)
-#define MBUF_BUFFER_LEN     (2048)
+#define NB_MBUF             (1 << 14)
+#define MBUF_BUFFER_LEN     (1 << 11)
 #define MBUF_SIZE           (MBUF_BUFFER_LEN + sizeof(struct rte_mbuf) + RTE_PKTMBUF_HEADROOM)
 
 int

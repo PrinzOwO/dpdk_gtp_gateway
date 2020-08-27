@@ -78,9 +78,7 @@ process_gtpv1(struct rte_mbuf *m, uint8_t port, gtpv1_t *rx_gtp_hdr)
             rte_pktmbuf_prepend(m, (uint16_t)sizeof(struct rte_ether_hdr));
 
     eth_hdr->ether_type = rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV4);
-    rte_ether_addr_copy(
-        (const struct rte_ether_addr *)port_iface_map[out_port]->hw_addr,
-        (struct rte_ether_addr *)eth_hdr->s_addr.addr_bytes);
+    rte_ether_addr_copy(&port_iface_map[out_port]->hw_addr, &eth_hdr->s_addr);
 
     ret = arp_get_mac(inner_ip_hdr->dst_addr, eth_hdr->d_addr.addr_bytes);
     if (unlikely(ret != 1)) {
@@ -142,9 +140,7 @@ process_ipv4(struct rte_mbuf *m, uint8_t port, struct rte_ipv4_hdr *rx_ip_hdr)
 
     // Ethernet header
     eth_hdr->ether_type = 0x8; // IPv4
-    rte_ether_addr_copy(
-        (const struct rte_ether_addr *)out_iface->hw_addr,
-        (struct rte_ether_addr *)eth_hdr->s_addr.addr_bytes);
+    rte_ether_addr_copy(&out_iface->hw_addr, &eth_hdr->s_addr);
 
     ret = arp_get_mac(gtp_tunnel->ran_ipv4, eth_hdr->d_addr.addr_bytes);
     if (unlikely(ret != 1)) {

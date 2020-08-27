@@ -49,7 +49,7 @@
 typedef struct confg_gtp_port_s {
     uint8_t port_num;
     // char ipv4[INET_ADDRSTRLEN];
-    uint32_t ipv4; // host format (before htonl)
+    uint32_t ipv4;
     uint8_t gtp_type;
     uint8_t pkt_index;
 } confg_gtp_port_t;
@@ -58,8 +58,8 @@ typedef struct confg_gtp_tunnel_s {
     uint8_t id;
     uint32_t teid_in;
     uint32_t teid_out;
-    uint32_t ue_ipv4; // host format (before htonl)
-    uint32_t ran_ipv4; // host format (before htonl)
+    uint32_t ue_ipv4;
+    uint32_t ran_ipv4;
 } confg_gtp_tunnel_t;
 
 typedef struct app_confg_s {

@@ -46,8 +46,7 @@ populate_node_info(void)
             numa_node_info[socketId].lcoreAvail = numa_node_info[socketId].lcoreAvail | (1 << lcoreIndex);
             numa_node_info[socketId].lcoreTotal += 1;
         } else {
-            rte_panic("\nERROR: Lcore %d Socket %d not enabled\n", lcoreIndex, socketId);
-            exit(EXIT_FAILURE);
+            rte_exit(EXIT_FAILURE, "\nERROR: Lcore %d Socket %d not enabled\n", lcoreIndex, socketId);
         }
     }
     printf("\n");
@@ -67,7 +66,7 @@ populate_node_info(void)
         printf("\n - Driver: %s", devInfo.driver_name);
         printf("\n - If index: %d", devInfo.if_index);
         printf("\n - MAC: %02" PRIx8 ":%02" PRIx8 ":%02" PRIx8
-               " %02" PRIx8 ":%02" PRIx8 ":%02" PRIx8,
+               ":%02" PRIx8 ":%02" PRIx8 ":%02" PRIx8,
                addr.addr_bytes[0], addr.addr_bytes[1],
                addr.addr_bytes[2], addr.addr_bytes[3],
                addr.addr_bytes[4], addr.addr_bytes[5]);
@@ -111,10 +110,8 @@ populate_node_info(void)
                 rte_pktmbuf_init, NULL,
                 i, /*SOCKET_ID_ANY*/
                 0 /*MEMPOOL_F_SP_PUT*/);
-            if (unlikely(numa_node_info[i].tx[portIndex] == NULL)) {
-                rte_panic("\n ERROR: failed to get mem-pool for tx on node %d intf %d\n", i, portIndex);
-                exit(EXIT_FAILURE);
-            }
+            if (unlikely(numa_node_info[i].tx[portIndex] == NULL))
+                rte_exit(EXIT_FAILURE, "\n ERROR: failed to get mem-pool for tx on node %d intf %d\n", i, portIndex);
 
             /* create mempool for RX */
             sprintf(mempoolName, "mbuf_pool-%d-%d-rx", i, portIndex);
@@ -126,10 +123,8 @@ populate_node_info(void)
                 rte_pktmbuf_init, NULL,
                 i, /*SOCKET_ID_ANY*/
                 0 /*MEMPOOL_F_SP_PUT*/);
-            if (unlikely(numa_node_info[i].rx[portIndex] == NULL)) {
-                rte_panic("\n ERROR: failed to get mem-pool for rx on node %d intf %d\n", i, portIndex);
-                exit(EXIT_FAILURE);
-            }
+            if (unlikely(numa_node_info[i].rx[portIndex] == NULL))
+                rte_exit(EXIT_FAILURE, "\n ERROR: failed to get mem-pool for rx on node %d intf %d\n", i, portIndex);
         }
     }
 

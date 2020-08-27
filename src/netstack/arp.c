@@ -11,6 +11,7 @@
 #include <rte_mbuf.h>
 #include <rte_ethdev.h>
 #include <rte_jhash.h>
+#include <rte_arp.h>
 
 #include "pktbuf.h"
 #include "ether.h"
@@ -22,150 +23,146 @@ extern interface_t *port_iface_map[MAX_INTERFACES];
 /* GLOBALS */
 static const char *arp_state_str[] = {"FREE", "PENDING", "RESOLVED", "PERMANENT"};
 static struct rte_hash *arp_table = NULL; // [uint32_t ipv4_addr] = (arp_entry_t *arp_entry)
-static struct rte_hash *arp_pkt_egqs; // pkt egress queues: [uint32_t ipv4_addr] = (struct rte_ring *pkt_egq)
 
-static __rte_always_inline int arp_send_reply_inplace(struct rte_mbuf *m, uint32_t src_ip_addr, struct arp *arp_hdr);
+static __rte_always_inline int arp_send_reply_inplace(struct rte_mbuf *m, uint32_t src_ip_addr, struct rte_arp_hdr *arp_hdr);
 static __rte_always_inline int arp_send(struct rte_mbuf *mbuf, uint8_t port);
-static __rte_always_inline int arp_add(uint32_t ipv4_addr, unsigned char *mac_addr, arp_state_t state);
-static __rte_always_inline int arp_update(uint32_t ipv4_addr, unsigned char *mac_addr, arp_state_t prev_state, arp_state_t new_state);
+static __rte_always_inline int arp_add(uint32_t ipv4_addr, struct rte_ether_addr *mac_addr, arp_state_t state);
+static __rte_always_inline int arp_update(uint32_t ipv4_addr, struct rte_ether_addr *mac_addr, arp_state_t prev_state, arp_state_t new_state);
 
-int
-arp_init(int with_locks)
+int arp_init(int with_locks)
 {
-    // Create arp table
-    struct rte_hash_parameters params = {0};
+    arp_table = arp_table_create("arp_table", MAX_ARP_ENTRIES, with_locks ?
+        RTE_HASH_EXTRA_FLAGS_TRANS_MEM_SUPPORT | RTE_HASH_EXTRA_FLAGS_RW_CONCURRENCY : 0);
 
-    params.name = "arp_table";
-    params.entries = MAX_ARP_ENTRIES;
-    params.key_len = sizeof(uint32_t);
-    params.hash_func = rte_jhash;
-    params.hash_func_init_val = 0;
-    params.socket_id = rte_socket_id();
-    params.extra_flag = with_locks ?
-        RTE_HASH_EXTRA_FLAGS_TRANS_MEM_SUPPORT |
-        RTE_HASH_EXTRA_FLAGS_RW_CONCURRENCY : 0;
-
-    assert(rte_hash_find_existing(params.name) == NULL);
-    arp_table = rte_hash_create(&params);
-    if ((intptr_t)arp_table <= 0) return -1;
-
-    // Create arp_pkt_egqs
-    params.name = "arp_pkt_egqs";
-    params.entries = MAX_EGRESS_Q_IP_ENTRIES;
-    params.key_len = sizeof(uint32_t);
-    params.hash_func = rte_jhash;
-    params.hash_func_init_val = 0;
-    params.socket_id = rte_socket_id();
-    params.extra_flag = with_locks ?
-        RTE_HASH_EXTRA_FLAGS_TRANS_MEM_SUPPORT |
-        RTE_HASH_EXTRA_FLAGS_RW_CONCURRENCY : 0;
-
-    assert(rte_hash_find_existing(params.name) == NULL);
-    arp_pkt_egqs = rte_hash_create(&params);
-    if ((intptr_t)arp_pkt_egqs <= 0) return -1;
+    if ((intptr_t) arp_table <= 0)
+        return -1;
 
     return 0;
 }
 
-int
-arp_terminate(void)
+int arp_terminate(void)
 {
-    uint32_t *ipv4_addr, iter;
-    arp_entry_t *arp_entry;
-    struct rte_ring *pkt_egq;
-    
-    // Free egress pkt queue
-    iter = 0;
-    while (rte_hash_iterate(arp_pkt_egqs, (void *)&ipv4_addr, (void **)&pkt_egq, &iter) >= 0) {
-        rte_ring_free(pkt_egq);
-    }
-    
-    // Free the arp table
-    iter = 0;
-    while (rte_hash_iterate(arp_table, (void *)&ipv4_addr, (void **)&arp_entry, &iter) >= 0) {
-        free(arp_entry);
-    }
-
-    rte_hash_free(arp_table);
+    arp_table_destroy(arp_table);
     logger(LOG_ARP, L_INFO, "ARP table freed.\n");
     return 0;
 }
 
-int
-arp_in(struct rte_mbuf *mbuf)
+int arp_in(struct rte_mbuf *mbuf)
 {
     int ret;
-    assert(mbuf->buf_len >= sizeof(struct arp));
-    assert(rte_pktmbuf_data_len(mbuf) >= (sizeof(struct arp) + sizeof(struct rte_ether_hdr)));
 
-    struct arp *arp_hdr =
-        (struct arp *)(rte_pktmbuf_mtod(mbuf, unsigned char *) + sizeof(struct rte_ether_hdr));
-    uint32_t ip_addr_from = int_addr_from_char(arp_hdr->src_pr_add, 1);
+    // Length of ARP frame should be larger than (ethernet frame + arp header)
+    if (unlikely(rte_pktmbuf_data_len(mbuf) < (sizeof(struct rte_arp_hdr) + sizeof(struct rte_ether_hdr)))) {
+        logger(LOG_ARP, L_INFO, "[ARP Frame] Length of ARP is not enough, drop it\n");
+        ret = -1;
+        goto PKTMBUF_FREE;
+    }
 
-    switch (ntohs(arp_hdr->opcode)) {
+    struct rte_arp_hdr *arp_hdr = (rte_pktmbuf_mtod_offset(mbuf, struct rte_arp_hdr *, sizeof(struct rte_ether_hdr)));
+    struct rte_arp_ipv4 *arp_data = &arp_hdr->arp_data;
+
+    switch (rte_be_to_cpu_16(arp_hdr->arp_opcode)) {
         case ARP_REQ: {
-            uint32_t ip_addr_to = int_addr_from_char(arp_hdr->dst_pr_add, 1);
-
             logger_s(LOG_ARP, L_INFO, "\n");
             logger(LOG_ARP, L_INFO, "[ARP Request] Who has ");
-            print_ipv4(ip_addr_to, L_DEBUG);
+            print_ipv4(arp_data->arp_tip, L_DEBUG);
             logger_s(LOG_ARP, L_INFO, "  Tell ");
-            print_ipv4(ip_addr_from, L_DEBUG);
+            print_ipv4(arp_data->arp_sip, L_DEBUG);
             logger_s(LOG_ARP, L_DEBUG, "\n");
 
-            // arp_send_reply(ip_addr_to, arp_hdr->src_hw_add, arp_hdr->src_pr_add);
-            ret = arp_send_reply_inplace(mbuf, ip_addr_to, arp_hdr);
-            if (unlikely(ret != 1)) {
-                rte_pktmbuf_free(mbuf);
-            }
-
-            arp_add_mac(ip_addr_from, arp_hdr->src_hw_add, 0);
-
+            arp_add_mac(arp_data->arp_sip, &arp_data->arp_sha, 0);
             arp_print_table(L_DEBUG);
             logger_s(LOG_ARP, L_DEBUG, "\n");
+
+            ret = arp_send_reply_inplace(mbuf, arp_data->arp_tip, arp_hdr);
+
+            if (unlikely(ret != 0))
+                goto PKTMBUF_FREE;
+
             break;
         }
         case ARP_REPLY: {
             logger_s(LOG_ARP, L_INFO, "\n");
             logger(LOG_ARP, L_INFO, "[ARP Reply] ");
-            print_ipv4(ip_addr_from, L_DEBUG);
+            print_ipv4(arp_data->arp_sip, L_DEBUG);
             logger_s(LOG_ARP, L_INFO, "  is at ");
-            print_mac(arp_hdr->src_hw_add, L_DEBUG);
+            print_mac(&arp_data->arp_sha, L_DEBUG);
             logger_s(LOG_ARP, L_DEBUG, "\n");
 
             // Check if dst mac is hosted
             interface_t *iface = iface_list;
-            while (iface && memcmp(&arp_hdr->dst_hw_add, &iface->hw_addr, RTE_ETHER_ADDR_LEN)) {
+            while (iface && !rte_is_same_ether_addr(&arp_data->arp_tha, &iface->hw_addr)) {
                 iface = iface->next;
             }
 
             if (unlikely(iface == NULL)) {
                 logger(LOG_ARP, L_INFO, "ARP reply ignored, mac not hosted\n");
-                rte_pktmbuf_free(mbuf);
-                return -1;
+                goto PKTMBUF_FREE;
             }
 
-            ret = arp_update(ip_addr_from, arp_hdr->src_hw_add, ARP_STATE_INCOMPLETE, ARP_STATE_REACHABLE);
-            assert(ret == 0);
+            ret = arp_update(arp_data->arp_sip, &arp_data->arp_sha,
+                ARP_STATE_INCOMPLETE, ARP_STATE_REACHABLE);
+            
+            if (unlikely(ret != 0))
+                goto PKTMBUF_FREE;
 
             arp_print_table(L_DEBUG);
             logger_s(LOG_ARP, L_DEBUG, "\n");
             rte_pktmbuf_free(mbuf);
             break;
         }
-        default: {
-            assert(0);
-        }
     }
 
     fflush(stdout);
     return 0;
+
+PKTMBUF_FREE:
+    rte_pktmbuf_free(mbuf);
+    return -1;
 }
 
-int
-arp_send_request(uint32_t dst_ip_addr, uint8_t port)
+struct rte_hash *arp_table_create(const char *name, uint32_t entries, uint8_t extra_flag)
 {
-    unsigned char dest_mac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+    struct rte_hash_parameters params = {
+        .name = name,
+        .entries = entries,
+        .key_len = sizeof(uint32_t),
+        .hash_func = rte_jhash,
+        .hash_func_init_val = 0,
+        .socket_id = rte_socket_id(),
+        .extra_flag = extra_flag,
+    };
+
+    if (rte_hash_find_existing(params.name) != NULL)
+        return NULL;
+
+    return rte_hash_create(&params);
+}
+
+void arp_table_destroy(struct rte_hash *arp_table) {
+    uint32_t *ipv4_addr, iter;
+    arp_entry_t *arp_entry;
+
+    while (rte_hash_iterate(arp_table, (void *)&ipv4_addr, (void **)&arp_entry, &iter) >= 0) {
+        free(arp_entry);
+    }
+
+    rte_hash_free(arp_table);
+}
+
+void arp_header_prepend(struct rte_mbuf *mbuf,
+        struct rte_ether_addr *src_mac,
+        struct rte_ether_addr *dst_mac,
+        uint32_t src_ip, uint32_t dst_ip,
+        uint32_t opcode)
+{
+    struct rte_arp_hdr *arp_req = (struct rte_arp_hdr *) rte_pktmbuf_prepend(mbuf, sizeof(struct rte_arp_hdr));
+    arp_header_prepend_inplace(arp_req, src_mac, dst_mac, src_ip, dst_ip, opcode);
+}
+
+int arp_send_request(uint32_t dst_ip_addr, uint8_t port)
+{
+    unsigned char dst_mac[6] = {0x0, 0x0, 0x0, 0x0, 0x0, 0x0};
     interface_t *iface = port_iface_map[port];
 
     if (unlikely(iface == NULL)) {
@@ -182,37 +179,24 @@ arp_send_request(uint32_t dst_ip_addr, uint8_t port)
     print_ipv4(iface->ipv4_addr, L_DEBUG);
 
     struct rte_mbuf *mbuf = get_mbuf();
-    assert(likely(mbuf != NULL));
-
-    struct arp *arp_req = (struct arp *)rte_pktmbuf_prepend(mbuf, sizeof(struct arp));
-    arp_req->hw_type = htons(HW_TYPE_ETHERNET);
-    arp_req->pr_type = htons(SW_TYPE_IPV4);
-    arp_req->hw_len = RTE_ETHER_ADDR_LEN;
-    arp_req->pr_len = PR_LEN_IPV4;
-    arp_req->opcode = htons(1);
-    rte_memcpy(arp_req->src_hw_add, iface->hw_addr, RTE_ETHER_ADDR_LEN);
-    rte_memcpy(arp_req->dst_hw_add, dest_mac, RTE_ETHER_ADDR_LEN);
-    rte_memcpy(arp_req->src_pr_add, &iface->ipv4_addr, PR_LEN_IPV4);
-    rte_memcpy(arp_req->dst_pr_add, &dst_ip_addr, PR_LEN_IPV4);
-
-    int ret = arp_send(mbuf, iface->port);
-    if (ret == 0) {
-        ret = arp_add(dst_ip_addr, NULL, ARP_STATE_INCOMPLETE);
-        return ret == 0 ? 0 : -1;
-    } else {
-        rte_pktmbuf_free(mbuf);
+    if (unlikely(mbuf == NULL))
         return -1;
-    }
+
+    struct rte_arp_hdr *arp_req = (struct rte_arp_hdr *) rte_pktmbuf_prepend(mbuf, sizeof(struct rte_arp_hdr));
+    arp_header_prepend_inplace(arp_req, &iface->hw_addr, (struct rte_ether_addr *) dst_mac, iface->ipv4_addr, dst_ip_addr, RTE_ARP_OP_REQUEST);
+
+    if (likely(arp_send(mbuf, iface->port) == 0))
+        return arp_add(dst_ip_addr, NULL, ARP_STATE_INCOMPLETE);;
+
+    rte_pktmbuf_free(mbuf);
+    return -1;
 }
 
-// Faster
-static __rte_always_inline int
-arp_send_reply_inplace(struct rte_mbuf *m, uint32_t src_ip_addr, struct arp *arp_hdr)
+static __rte_always_inline int arp_send_reply_inplace(struct rte_mbuf *m, uint32_t src_ip_addr, struct rte_arp_hdr *arp_hdr)
 {
     interface_t *iface = iface_list;
-    while (iface && src_ip_addr != iface->ipv4_addr) {
+    while (iface && src_ip_addr != iface->ipv4_addr)
         iface = iface->next;
-    }
 
     if (unlikely(iface == NULL)) {
         logger(LOG_ARP, L_INFO, "ARP request failed, address not hosted\n");
@@ -223,18 +207,20 @@ arp_send_reply_inplace(struct rte_mbuf *m, uint32_t src_ip_addr, struct arp *arp
 
     // Switch src and dst data and set bonding MAC
     rte_ether_addr_copy(&eth_hdr->s_addr, &eth_hdr->d_addr);
-    rte_ether_addr_copy((struct rte_ether_addr *)&iface->hw_addr, &eth_hdr->s_addr);
+    rte_ether_addr_copy((struct rte_ether_addr *) &iface->hw_addr, &eth_hdr->s_addr);
 
-    arp_hdr->opcode = rte_cpu_to_be_16(RTE_ARP_OP_REPLY);
-    rte_memcpy(arp_hdr->dst_hw_add, arp_hdr->src_hw_add, RTE_ETHER_ADDR_LEN);
-    rte_memcpy(arp_hdr->src_hw_add, iface->hw_addr, RTE_ETHER_ADDR_LEN);
-    rte_memcpy(arp_hdr->src_pr_add, &src_ip_addr, PR_LEN_IPV4);
-    rte_memcpy(arp_hdr->dst_pr_add, arp_hdr->src_pr_add, PR_LEN_IPV4);
+    arp_hdr->arp_opcode = rte_cpu_to_be_16(RTE_ARP_OP_REPLY);
+
+    struct rte_arp_ipv4 *arp_data = &arp_hdr->arp_data;
+    rte_ether_addr_copy(&arp_data->arp_sha, &arp_data->arp_tha);
+    rte_ether_addr_copy(&iface->hw_addr, &arp_data->arp_sha);
+    arp_data->arp_tip = arp_data->arp_sip;
+    arp_data->arp_sip = src_ip_addr;
 
     logger(LOG_ARP, L_DEBUG, "<ARP Reply> ");
     print_ipv4(src_ip_addr, L_DEBUG);
     logger_s(LOG_ARP, L_DEBUG, "  is at ");
-    print_mac(iface->hw_addr, L_DEBUG);
+    print_mac(&iface->hw_addr, L_DEBUG);
 
     // TODO: fix the below, port should be dfrom routing
     logger_s(LOG_ARP, L_DEBUG, " [TX#%d]", iface->port);
@@ -243,20 +229,18 @@ arp_send_reply_inplace(struct rte_mbuf *m, uint32_t src_ip_addr, struct arp *arp
     if (unlikely(ret != 1)) {
         logger_s(LOG_ARP, L_CRITICAL, " ERR(rte_eth_tx_burst=%d)\n", ret);
         return -1;
-    } else {
-        logger_s(LOG_ARP, L_DEBUG, "\n");
-        return 0;
     }
+
+    logger_s(LOG_ARP, L_DEBUG, "\n");
+    return 0;
 }
 
-int
-arp_send_reply(uint32_t src_ip_addr, unsigned char *dst_hw_addr,
-               unsigned char *dst_pr_add)
+int arp_send_reply(uint32_t src_ip_addr, struct rte_ether_addr *dst_hw_addr,
+               uint32_t dst_pr_add)
 {
     interface_t *iface = iface_list;
-    while (iface && src_ip_addr != iface->ipv4_addr) {
+    while (iface && src_ip_addr != iface->ipv4_addr)
         iface = iface->next;
-    }
 
     if (unlikely(iface == NULL)) {
         logger(LOG_ARP, L_INFO, "ARP request failed, address not hosted\n");
@@ -264,53 +248,45 @@ arp_send_reply(uint32_t src_ip_addr, unsigned char *dst_hw_addr,
     }
 
     struct rte_mbuf *mbuf = get_mbuf();
-    assert(likely(mbuf != NULL));
+    if (unlikely(mbuf == NULL))
+        return -1;
 
-    struct arp *arp_reply = (struct arp *)rte_pktmbuf_prepend(mbuf, sizeof(struct arp));
-    arp_reply->hw_type = htons(HW_TYPE_ETHERNET);
-    arp_reply->pr_type = htons(SW_TYPE_IPV4);
-    arp_reply->hw_len = RTE_ETHER_ADDR_LEN;
-    arp_reply->pr_len = PR_LEN_IPV4;
-    arp_reply->opcode = htons(2);
-    rte_memcpy(arp_reply->src_hw_add, iface->hw_addr, RTE_ETHER_ADDR_LEN);
-    rte_memcpy(arp_reply->dst_hw_add, dst_hw_addr, RTE_ETHER_ADDR_LEN);
-    rte_memcpy(arp_reply->src_pr_add, &src_ip_addr, PR_LEN_IPV4);
-    rte_memcpy(arp_reply->dst_pr_add, dst_pr_add, PR_LEN_IPV4);
+    struct rte_arp_hdr *arp_reply = (struct rte_arp_hdr *) rte_pktmbuf_prepend(mbuf, sizeof(struct rte_arp_hdr));
+    arp_header_prepend_inplace(arp_reply, &iface->hw_addr, dst_hw_addr, src_ip_addr, dst_pr_add, RTE_ARP_OP_REPLY);
 
     logger(LOG_ARP, L_DEBUG, "<ARP Reply> ");
     print_ipv4(src_ip_addr, L_DEBUG);
     logger_s(LOG_ARP, L_DEBUG, "  is at ");
-    print_mac(iface->hw_addr, L_DEBUG);
+    print_mac(&iface->hw_addr, L_DEBUG);
 
     int ret = arp_send(mbuf, iface->port);
-    if (likely(ret == 0)) {
+    if (likely(ret == 0))
         return 0;
-    } else {
-        rte_pktmbuf_free(mbuf);
-        return -1;
-    }
+
+    rte_pktmbuf_free(mbuf);
+    return -1;
 }
 
-static __rte_always_inline int
-arp_send(struct rte_mbuf *mbuf, uint8_t port)
+static __rte_always_inline int arp_send(struct rte_mbuf *mbuf, uint8_t port)
 {
-    int i;
-    struct arp *arp_hdr = (struct arp *)rte_pktmbuf_mtod(mbuf, struct arp *);
+    unsigned char dst_mac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+
+    struct rte_arp_hdr *arp_hdr = rte_pktmbuf_mtod(mbuf, struct rte_arp_hdr *);
     struct rte_ether_hdr *eth =
-        (struct rte_ether_hdr *)rte_pktmbuf_prepend(mbuf, sizeof(struct rte_ether_hdr));
+        (struct rte_ether_hdr *) rte_pktmbuf_prepend(mbuf, sizeof(struct rte_ether_hdr));
 
-    eth->ether_type = htons(RTE_ETHER_TYPE_ARP);
+    eth->ether_type = rte_cpu_to_be_16(RTE_ETHER_TYPE_ARP);
 
-    if (arp_hdr->opcode == ntohs(ARP_REQ)) {
-        rte_memcpy(&eth->s_addr.addr_bytes[0], arp_hdr->src_hw_add, sizeof(arp_hdr->src_hw_add));
-        for (i = 0; i < 6; i++) {
-            eth->d_addr.addr_bytes[i] = 0xff;
-        }
-    } else if (arp_hdr->opcode == ntohs(ARP_REPLY)) {
-        rte_memcpy(&eth->s_addr.addr_bytes[0], arp_hdr->src_hw_add, sizeof(arp_hdr->src_hw_add));
-        rte_memcpy(&eth->d_addr.addr_bytes[0], arp_hdr->dst_hw_add, sizeof(arp_hdr->dst_hw_add));
-    } else {
-        logger(LOG_ARP, L_CRITICAL, "Invalid opcode %d", arp_hdr->opcode);
+    if (arp_hdr->arp_opcode == rte_be_to_cpu_16(ARP_REQ)) {
+        rte_ether_addr_copy(&arp_hdr->arp_data.arp_sha, &eth->s_addr);
+        rte_ether_addr_copy((struct rte_ether_addr *) dst_mac, &eth->d_addr);
+    }
+    else if (arp_hdr->arp_opcode == rte_be_to_cpu_16(ARP_REPLY)) {
+        rte_ether_addr_copy(&arp_hdr->arp_data.arp_sha, &eth->s_addr);
+        rte_ether_addr_copy(&arp_hdr->arp_data.arp_tha, &eth->d_addr);
+    }
+    else {
+        logger(LOG_ARP, L_CRITICAL, "Invalid opcode %d", arp_hdr->arp_opcode);
         return -1;
     }
 
@@ -321,10 +297,10 @@ arp_send(struct rte_mbuf *mbuf, uint8_t port)
     if (unlikely(ret != 1)) {
         logger_s(LOG_ARP, L_CRITICAL, " ERR(rte_eth_tx_burst=%d)\n", ret);
         return -1;
-    } else {
-        logger_s(LOG_ARP, L_DEBUG, "\n");
-        return 0;
     }
+
+    logger_s(LOG_ARP, L_DEBUG, "\n");
+    return 0;
 }
 
 /**
@@ -333,7 +309,7 @@ arp_send(struct rte_mbuf *mbuf, uint8_t port)
  * Sample code:
  *   uint32_t ip = (192 << 24 | 168 << 16 | 0 << 1 | 2); // 192.168.0.1
  *   unsigned char mac[6] = {0x3c, 0xfd, 0xfe, 0x7a, 0x6c, 0x29}; // 3c:fd:fe:7a:6c:29
- *   arp_add_mac(htonl(ip), mac);
+ *   arp_add_mac(rte_cpu_to_be_32(ip), mac);
  */
 int
 arp_get_mac(uint32_t ipv4_addr, unsigned char *mac_addr)
@@ -346,19 +322,18 @@ arp_get_mac(uint32_t ipv4_addr, unsigned char *mac_addr)
     
     // REACHABLE or PERMANENT
     if (likely(ret >= 0 && arp_entry->state >= ARP_STATE_REACHABLE)) {
-        rte_memcpy(mac_addr, arp_entry->mac_addr, RTE_ETHER_ADDR_LEN);
+        rte_ether_addr_copy(&arp_entry->mac_addr, (struct rte_ether_addr *) mac_addr);
         // printf(": mac found ");
         // print_mac(mac_addr, L_ALL);
         // printf("\n");
         return 1;
-    } else {
-        // printf(": no mac found%d\n", ret);
-        return 0;
     }
+
+    // printf(": no mac found%d\n", ret);
+    return 0;
 }
 
-int
-arp_add_mac(uint32_t ipv4_addr, unsigned char *mac_addr, int permanent)
+int arp_add_mac(uint32_t ipv4_addr, struct rte_ether_addr *mac_addr, int permanent)
 {
     logger(LOG_ARP, L_INFO, "Adding to arp table: IP ");
     print_ipv4(ipv4_addr, L_INFO);
@@ -369,41 +344,31 @@ arp_add_mac(uint32_t ipv4_addr, unsigned char *mac_addr, int permanent)
     return arp_add(ipv4_addr, mac_addr, permanent ? ARP_STATE_PERMANENT : ARP_STATE_REACHABLE);
 }
 
-static __rte_always_inline int
-arp_update(uint32_t ipv4_addr, unsigned char *mac_addr,
+static __rte_always_inline int arp_update(uint32_t ipv4_addr, struct rte_ether_addr *mac_addr,
            arp_state_t prev_state, arp_state_t new_state)
 {
     arp_entry_t *arp_entry;
-    int ret = rte_hash_lookup_data(arp_table, (const void *)&ipv4_addr, (void **)&arp_entry);
-    
-    if (ret >= 0 && (arp_entry->state == prev_state || prev_state == ARP_STATE_ANY)) {
-        rte_memcpy(mac_addr, arp_entry->mac_addr, RTE_ETHER_ADDR_LEN);
+
+    if (rte_hash_lookup_data(arp_table, (const void *) &ipv4_addr, (void **) &arp_entry) >= 0 &&
+            (arp_entry->state == prev_state || prev_state == ARP_STATE_ANY)) {
+        rte_ether_addr_copy(mac_addr, &arp_entry->mac_addr);
         arp_entry->state = new_state;
+
         return 0;
-    } else {
-        return -1;
     }
+
+    return -1;
 }
 
-static __rte_always_inline int
-arp_add(uint32_t ipv4_addr, unsigned char *mac_addr, arp_state_t state)
+static __rte_always_inline int arp_add(uint32_t ipv4_addr, struct rte_ether_addr *mac_addr, arp_state_t state)
 {
     arp_entry_t *arp_entry = malloc(sizeof(arp_entry_t));
     arp_entry->state = state;
     arp_entry->ipv4_addr = ipv4_addr;
-    if (mac_addr) {
-        rte_memcpy(arp_entry->mac_addr, mac_addr, RTE_ETHER_ADDR_LEN);
-    }
+    if (mac_addr)
+        rte_ether_addr_copy(mac_addr, &arp_entry->mac_addr);
 
-    int ret = rte_hash_add_key_data(arp_table, (const void *)&ipv4_addr, (void *)arp_entry);
-    return ret == 0 ? 0 : -1;
-}
-
-int
-arp_queue_egress_pkt(uint32_t ipv4_addr, struct rte_mbuf *m)
-{
-    // TODO
-    return 0;
+    return rte_hash_add_key_data(arp_table, (const void *) &ipv4_addr, (void *) arp_entry);
 }
 
 void
@@ -422,7 +387,7 @@ arp_print_table(TraceLevel trace_level)
         logger_s(LOG_ARP, trace_level, "\n");
 
         logger(LOG_ARP, trace_level, "   MAC = ");
-        print_mac(arp_entry->mac_addr, trace_level);
+        print_mac(&arp_entry->mac_addr, trace_level);
         logger_s(LOG_ARP, trace_level, "\n");
 
         logger(LOG_ARP, trace_level, "   STATE = ");
@@ -431,29 +396,19 @@ arp_print_table(TraceLevel trace_level)
     }
 }
 
-void
-print_ipv4(uint32_t ip_addr, TraceLevel trace_level)
+void print_ipv4(uint32_t ip_addr, TraceLevel trace_level)
 {
-    int i;
-    uint8_t ip;
-    ip_addr = htonl(ip_addr);
-
-    for (i = 0; i < 4; i++) {
-        ip = ip_addr >> 24;
-        ip_addr = ip_addr << 8;
-        logger_s(LOG_ARP, trace_level, "%u", ip);
-        if (i != 3) {
-            logger_s(LOG_ARP, trace_level, ".");
-        }
-    }
+    logger_s(LOG_ARP, trace_level, "%u.%u.%u.%u",
+         (ip_addr & 0xff), ((ip_addr >> 8) & 0xff),
+         ((ip_addr >> 16) & 0xff), (ip_addr >> 24));
 }
 
-void
-print_mac(unsigned char *mac_addr, TraceLevel trace_level)
+void print_mac(struct rte_ether_addr *mac_addr, TraceLevel trace_level)
 {
     int i;
     for (i = 0; i < RTE_ETHER_ADDR_LEN - 1; i++) {
-        logger_s(LOG_ARP, trace_level, "%x:", mac_addr[i]);
+        logger_s(LOG_ARP, trace_level, "%x:", mac_addr->addr_bytes[i]);
     }
-    logger_s(LOG_ARP, trace_level, "%x", mac_addr[i]);
+
+    logger_s(LOG_ARP, trace_level, "%x", mac_addr->addr_bytes[i]);
 }

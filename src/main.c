@@ -30,8 +30,7 @@ static int add_static_arp(void);
 static __rte_always_inline int pkt_handler(void *arg);
 static __rte_always_inline void process_pkt_mbuf(struct rte_mbuf *m, uint8_t port);
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
     int32_t i;
     int32_t ret;
@@ -40,39 +39,38 @@ main(int argc, char **argv)
 
     // Initialize DPDK EAL
     ret = rte_eal_init(argc, argv);
-    if (ret < 0) {
-        printf("\n ERROR: cannot init EAL\n");
-        return -2;
-    }
+    if (ret < 0)
+        rte_exit(EXIT_FAILURE, "\n ERROR: cannot init EAL\n");
 
     // Check Huge pages for memory buffers
     ret = rte_eal_has_hugepages();
-    if (ret < 0) {
-        rte_panic("\n ERROR: no Huge Page\n");
-        exit(EXIT_FAILURE);
-    }
+    if (ret < 0)
+        rte_exit(EXIT_FAILURE, "\n ERROR: no Huge Page\n");
+
+    // Register signals
+    signal(SIGINT, sigint_handler);
+    signal(SIGUSR1, sig_extra_stats);
+    signal(SIGUSR2, sig_config);
 
     // Load ini config file
     ret = load_config();
-    if (ret < 0) {
-        printf("\n ERROR: failed to load config\n");
-        return -1;
-    }
+    if (ret < 0)
+        rte_exit(EXIT_FAILURE, "\n ERROR: failed to load config\n");
 
     // Create packet buffer pool
     ret = mbuf_init();
     assert(ret == 0);
 
     ret = populate_node_info();
-    if (ret < 0) {
-        rte_panic("\n ERROR: in populating NUMA node Info\n");
-        exit(EXIT_FAILURE);
-    }
+    if (ret < 0)
+        rte_exit(EXIT_FAILURE, "\n ERROR: in populating NUMA node Info\n");
+
     printf("\n");
 
     // Init ARP table
     ret = arp_init(0);
-    assert(ret == 0);
+    if (ret < 0)
+        rte_exit(EXIT_FAILURE, "\n ERROR: failed to init ARP table\n");
 
     // Add interface info to interface and arp table
     ret = add_interfaces();
@@ -83,10 +81,8 @@ main(int argc, char **argv)
     assert(ret == 0);
 
     // Set interface options and queues
-    if (node_interface_setup() < 0) {
-        rte_panic("ERROR: interface setup Failed\n");
-        exit(EXIT_FAILURE);
-    }
+    if (node_interface_setup() < 0)
+        rte_exit(EXIT_FAILURE, "\n ERROR: interface setup Failed\n");
 
     // Launch thread lcores
     uint32_t lcore = rte_get_next_lcore(-1, 0, 0);
@@ -96,11 +92,6 @@ main(int argc, char **argv)
         // printf("Starting packet handler %d at lcore %d", i, lcore);
         rte_eal_remote_launch(pkt_handler, (void *)&app_config.gtp_ports[i].port_num, lcore);
     }
-
-    // Register signals
-    signal(SIGINT, sigint_handler);
-    signal(SIGUSR1, sig_extra_stats);
-    signal(SIGUSR2, sig_config);
 
     // Show stats
     printf("\n DISP_STATS=%s\n", app_config.disp_stats ? "ON" : "OFF");
@@ -125,14 +116,12 @@ main(int argc, char **argv)
     return 0;
 }
 
-static void
-sigint_handler(__attribute__((unused)) int signo)
+static void sigint_handler(__attribute__((unused)) int signo)
 {
     keep_running = 0;
 }
 
-static int
-add_interfaces(void)
+static int add_interfaces(void)
 {
     int32_t i;
     uint16_t avail_dev_count = rte_eth_dev_count_avail();
@@ -175,7 +164,7 @@ add_interfaces(void)
 
         iface.port = port_config->port_num;
         iface.ipv4_addr = port_config->ipv4;
-        memcpy(iface.hw_addr, addr.addr_bytes, sizeof(iface.hw_addr));
+        rte_ether_addr_copy(&addr, &iface.hw_addr);
 
         add_interface(&iface);
     }
@@ -183,15 +172,14 @@ add_interfaces(void)
     return 0;
 }
 
-static int
-add_static_arp(void)
+static int add_static_arp(void)
 {
     int32_t i, ret;
     arp_entry_t *arp_entry;
 
     for (i = 0; i < app_config.static_arp_count; i++) {
         arp_entry = &app_config.static_arps[i];
-        ret = arp_add_mac(arp_entry->ipv4_addr, arp_entry->mac_addr, 1);
+        ret = arp_add_mac(arp_entry->ipv4_addr, &arp_entry->mac_addr, 1);
         if (ret != 0)
             return -1;
     }
@@ -199,8 +187,7 @@ add_static_arp(void)
     return 0;
 }
 
-static __rte_always_inline int
-pkt_handler(void *arg)
+static __rte_always_inline int pkt_handler(void *arg)
 {
     uint8_t port = *((uint8_t *)arg);
     int32_t j, nb_rx;
@@ -247,8 +234,7 @@ pkt_handler(void *arg)
     return 0;
 }
 
-static __rte_always_inline void
-process_pkt_mbuf(struct rte_mbuf *m, uint8_t port)
+static __rte_always_inline void process_pkt_mbuf(struct rte_mbuf *m, uint8_t port)
 {
     struct rte_ether_hdr *eth_hdr = NULL;
     struct rte_ipv4_hdr *ip_hdr = NULL;

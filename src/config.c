@@ -223,9 +223,11 @@ load_arp_entries(struct rte_cfgfile *file, const char *section_name)
 
         if (STRCMP("ipv4", entries[j].name) == 0) {
             static_arp->ipv4_addr = inet_addr(entries[j].value);
-        } else if (STRCMP("mac", entries[j].name) == 0) {
-            cvt_mac(entries[j].value, static_arp->mac_addr);
-        } else {
+        }
+        else if (STRCMP("mac", entries[j].name) == 0) {
+            cvt_mac(entries[j].value, (unsigned char *) &static_arp->mac_addr);
+        }
+        else {
             printf("\n ERROR: unexpected entry %s with value %s\n",
                 entries[j].name, entries[j].value);
             fflush(stdout);
