@@ -6,7 +6,7 @@
 #define __ARP_H_
 
 #include <rte_common.h>
-#include <rte_ether.h>
+#include <rte_byteorder.h>
 #include <rte_hash.h>
 #include <rte_ring.h>
 #include <rte_ether.h>
@@ -33,39 +33,18 @@ typedef enum {
 } arp_state_t;
 
 typedef struct arp_entry_s {
-    uint32_t ipv4_addr;
+    rte_be32_t ipv4_addr;
     struct rte_ether_addr mac_addr;
     arp_state_t state;
 } arp_entry_t;
 
-int arp_init(int with_locks);
-int arp_terminate(void);
-
-int arp_in(struct rte_mbuf *mbuf);
-
 /**
- * arp_table_create - Create ARP table using hash table with algorithm "rte_jhash"
- *
- * @name: hash table name
- * @entries: number of entries
- * @extra_flag: extra flag for rte_hash
- * @return
- *   - Non NULL pointer if successfully
- *   - NULL pointer if error occurred
+ * An internal function to set ARP header
  */
-struct rte_hash *arp_table_create(const char *name, uint32_t entries, uint8_t extra_flag);
-
-/**
- * arp_table_destroy - Detroy ARP table using hash table
- *
- * @arp_table: struct rte_hash pointer
- */
-void arp_table_destroy(struct rte_hash *arp_table);
-
-static __rte_always_inline void arp_header_prepend_inplace(struct rte_arp_hdr *arp_req,
+static __rte_always_inline void arp_header_set_inplace(struct rte_arp_hdr *arp_req,
         struct rte_ether_addr *src_mac,
         struct rte_ether_addr *dst_mac,
-        uint32_t src_ip, uint32_t dst_ip,
+        rte_be32_t src_ip, rte_be32_t dst_ip,
         uint32_t opcode)
 {
     arp_req->arp_hardware = rte_cpu_to_be_16(RTE_ARP_HRD_ETHER);
@@ -81,24 +60,50 @@ static __rte_always_inline void arp_header_prepend_inplace(struct rte_arp_hdr *a
     arp_data->arp_tip = dst_ip;
 }
 
-void arp_header_prepend(struct rte_mbuf *mbuf, struct rte_ether_addr *src_mac, struct rte_ether_addr *dst_mac, uint32_t src_ip, uint32_t dst_ip, uint32_t opcode);
+/**
+ * Prepend and set ARP header
+ */
+void arp_header_prepend(struct rte_mbuf *mbuf,
+        struct rte_ether_addr *src_mac, struct rte_ether_addr *dst_mac,
+        rte_be32_t src_ip, rte_be32_t dst_ip,
+        uint32_t opcode);
 
 /**
+ * Handle a APR frame
+ * 
+ * @return
+ *   - 0 if handled successfully
+ *   - A negative number if error occurred
+ */
+int arp_in(struct rte_mbuf *mbuf);
+
+/**
+ * Send ARP request with a new space
+ * 
  * @return
  *   - 0 if sent successfully
  *   - A negative number if error occurred
  */
-int arp_send_request(uint32_t dst_ip_addr, uint8_t port);
+int arp_send_request(rte_be32_t dst_ip, uint8_t port);
 
 /**
+ * Send ARP reply with a new space
+ * 
  * @return
  *   - 0 if sent successfully
  *   - A negative number if error occurred
  */
-int arp_send_reply(uint32_t src_ip_addr, struct rte_ether_addr *dst_hw_addr,
-                   uint32_t dst_pr_add);
+int arp_send_reply(rte_be32_t src_ip,
+        struct rte_ether_addr *dst_mac, rte_be32_t dst_ip);
 
-int arp_get_mac(uint32_t ipv4_addr, unsigned char *mac_addr);
+/**
+ * Get MAC by network type IPv4 address
+ * 
+ * @return
+ *   - 0 if added successfully
+ *   - A negative number if error occurred
+ */
+int arp_get_mac(rte_be32_t ipv4, struct rte_ether_addr *mac);
 
 /**
  * Add an IPv4-MAC pair into arp table.
@@ -108,12 +113,24 @@ int arp_get_mac(uint32_t ipv4_addr, unsigned char *mac_addr);
  *   - 0 if added successfully
  *   - A negative number if error occurred
  */
-int arp_add_mac(uint32_t ipv4_addr, struct rte_ether_addr *mac_addr, int permanent);
+int arp_add_mac(rte_be32_t ipv4, struct rte_ether_addr *mac, int permanent);
 
-int arp_queue_egress_pkt(uint32_t ipv4_addr, struct rte_mbuf *m);
-
+/**
+ * Dump ARP table
+ */
 void arp_print_table(TraceLevel trace_level);
-void print_ipv4(uint32_t ip_addr, TraceLevel trace_level);
-void print_mac(struct rte_ether_addr *mac_addr, TraceLevel trace_level);
+
+/**
+ * Convert IPv4 address from big endian to xx.xx.xx.xx.
+ */
+void print_ipv4(rte_be32_t ipv4, TraceLevel trace_level);
+
+/**
+ * Convert MAC address from 48bits Ethernet address to xx:xx:xx:xx:xx:xx.
+ */
+void print_mac(struct rte_ether_addr *mac, TraceLevel trace_level);
+
+int arp_init(int with_locks);
+int arp_terminate(void);
 
 #endif /* __ARP_H_ */

@@ -80,8 +80,8 @@ process_gtpv1(struct rte_mbuf *m, uint8_t port, gtpv1_t *rx_gtp_hdr)
     eth_hdr->ether_type = rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV4);
     rte_ether_addr_copy(&port_iface_map[out_port]->hw_addr, &eth_hdr->s_addr);
 
-    ret = arp_get_mac(inner_ip_hdr->dst_addr, eth_hdr->d_addr.addr_bytes);
-    if (unlikely(ret != 1)) {
+    ret = arp_get_mac(inner_ip_hdr->dst_addr, &eth_hdr->d_addr);
+    if (unlikely(ret != 0)) {
         printf(" ERR(Inner dst ip not found in arp table: ");
         print_rte_ipv4(inner_ip_hdr->dst_addr);
         printf(") ");
@@ -142,8 +142,8 @@ process_ipv4(struct rte_mbuf *m, uint8_t port, struct rte_ipv4_hdr *rx_ip_hdr)
     eth_hdr->ether_type = 0x8; // IPv4
     rte_ether_addr_copy(&out_iface->hw_addr, &eth_hdr->s_addr);
 
-    ret = arp_get_mac(gtp_tunnel->ran_ipv4, eth_hdr->d_addr.addr_bytes);
-    if (unlikely(ret != 1)) {
+    ret = arp_get_mac(gtp_tunnel->ran_ipv4, &eth_hdr->d_addr);
+    if (unlikely(ret != 0)) {
         printf(" ERR(Dst ip not found in arp table: ");
         print_rte_ipv4(gtp_tunnel->ran_ipv4);
         printf(") ");
