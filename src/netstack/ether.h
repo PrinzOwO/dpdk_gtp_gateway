@@ -18,6 +18,5 @@ typedef struct interface_s {
 } interface_t;
 
 void add_interface(interface_t *iface);
-void set_interface_hw(uint8_t port, uint8_t *mac_addr);
 
 #endif /* __EHTER_H_ */
