@@ -13,6 +13,7 @@
 #include <rte_jhash.h>
 #include <rte_arp.h>
 
+#include "helper.h"
 #include "pktbuf.h"
 #include "ether.h"
 
@@ -307,32 +308,17 @@ static __rte_always_inline int arp_send(struct rte_mbuf *mbuf, uint8_t port)
     return 0;
 }
 
-/**
- * <Performance critical>
- *
- * Sample code:
- *   uint32_t ip = (192 << 24 | 168 << 16 | 0 << 1 | 2); // 192.168.0.1
- *   unsigned char mac[6] = {0x3c, 0xfd, 0xfe, 0x7a, 0x6c, 0x29}; // 3c:fd:fe:7a:6c:29
- *   arp_add_mac(rte_cpu_to_be_32(ip), mac);
- */
 int arp_get_mac(rte_be32_t ipv4, struct rte_ether_addr *mac)
 {
-    // printf("Getting mac for ");
-    // print_ipv4(ipv4, L_ALL);
-
     arp_entry_t *arp_entry;
     int ret = rte_hash_lookup_data(arp_table, (const void *)&ipv4, (void **)&arp_entry);
     
     // REACHABLE or PERMANENT
     if (likely(ret >= 0 && arp_entry->state >= ARP_STATE_REACHABLE)) {
         rte_ether_addr_copy(&arp_entry->mac_addr, mac);
-        // printf(": mac found ");
-        // print_mac(mac, L_ALL);
-        // printf("\n");
         return 0;
     }
 
-    // printf(": no mac found%d\n", ret);
     return -1;
 }
 
@@ -396,21 +382,4 @@ void arp_print_table(TraceLevel trace_level)
         logger(LOG_ARP, trace_level, "%s", arp_state_str[arp_entry->state]);
         logger_s(LOG_ARP, trace_level, "\n");
     }
-}
-
-void print_ipv4(rte_be32_t ipv4, TraceLevel trace_level)
-{
-    logger_s(LOG_ARP, trace_level, "%u.%u.%u.%u",
-         (ipv4 & 0xff), ((ipv4 >> 8) & 0xff),
-         ((ipv4 >> 16) & 0xff), (ipv4 >> 24));
-}
-
-void print_mac(struct rte_ether_addr *mac, TraceLevel trace_level)
-{
-    int i;
-    for (i = 0; i < RTE_ETHER_ADDR_LEN - 1; i++) {
-        logger_s(LOG_ARP, trace_level, "%x:", mac->addr_bytes[i]);
-    }
-
-    logger_s(LOG_ARP, trace_level, "%x", mac->addr_bytes[i]);
 }

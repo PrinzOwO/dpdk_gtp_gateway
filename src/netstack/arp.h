@@ -120,16 +120,6 @@ int arp_add_mac(rte_be32_t ipv4, struct rte_ether_addr *mac, int permanent);
  */
 void arp_print_table(TraceLevel trace_level);
 
-/**
- * Convert IPv4 address from big endian to xx.xx.xx.xx.
- */
-void print_ipv4(rte_be32_t ipv4, TraceLevel trace_level);
-
-/**
- * Convert MAC address from 48bits Ethernet address to xx:xx:xx:xx:xx:xx.
- */
-void print_mac(struct rte_ether_addr *mac, TraceLevel trace_level);
-
 int arp_init(int with_locks);
 int arp_terminate(void);
 
