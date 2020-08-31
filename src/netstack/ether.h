@@ -19,4 +19,17 @@ typedef struct interface_s {
 
 void add_interface(interface_t *iface);
 
+/**
+ * An internal function to set ethernet header
+ */
+static __rte_always_inline void ethernet_header_set_inplace(struct rte_ether_hdr *eth,
+        struct rte_ether_addr *src_mac,
+        struct rte_ether_addr *dst_mac,
+        uint16_t ether_type)
+{
+    eth->ether_type = rte_cpu_to_be_16(ether_type);
+    rte_ether_addr_copy(src_mac, &eth->s_addr);
+    rte_ether_addr_copy(dst_mac, &eth->d_addr);
+}
+
 #endif /* __EHTER_H_ */

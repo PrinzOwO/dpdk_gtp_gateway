@@ -280,15 +280,15 @@ static __rte_always_inline int arp_send(struct rte_mbuf *mbuf, uint8_t port)
     struct rte_ether_hdr *eth =
         (struct rte_ether_hdr *) rte_pktmbuf_prepend(mbuf, sizeof(struct rte_ether_hdr));
 
-    eth->ether_type = rte_cpu_to_be_16(RTE_ETHER_TYPE_ARP);
-
     if (arp_hdr->arp_opcode == rte_be_to_cpu_16(ARP_REQ)) {
-        rte_ether_addr_copy(&arp_hdr->arp_data.arp_sha, &eth->s_addr);
-        rte_ether_addr_copy((struct rte_ether_addr *) dst_mac, &eth->d_addr);
+        ethernet_header_set_inplace(eth,
+            &arp_hdr->arp_data.arp_sha, (struct rte_ether_addr *) dst_mac,
+            RTE_ETHER_TYPE_ARP);
     }
     else if (arp_hdr->arp_opcode == rte_be_to_cpu_16(ARP_REPLY)) {
-        rte_ether_addr_copy(&arp_hdr->arp_data.arp_sha, &eth->s_addr);
-        rte_ether_addr_copy(&arp_hdr->arp_data.arp_tha, &eth->d_addr);
+        ethernet_header_set_inplace(eth,
+            &arp_hdr->arp_data.arp_sha, &arp_hdr->arp_data.arp_tha,
+            RTE_ETHER_TYPE_ARP);
     }
     else {
         logger(LOG_ARP, L_CRITICAL, "Invalid opcode %d", arp_hdr->arp_opcode);
