@@ -6,7 +6,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+
 #include <rte_common.h>
+#include <rte_malloc.h>
 #include <rte_ether.h>
 #include <rte_mbuf.h>
 #include <rte_ethdev.h>
@@ -351,7 +353,7 @@ static __rte_always_inline int arp_update(uint32_t ipv4, struct rte_ether_addr *
 
 static __rte_always_inline int arp_add(uint32_t ipv4, struct rte_ether_addr *mac, arp_state_t state)
 {
-    arp_entry_t *arp_entry = malloc(sizeof(arp_entry_t));
+    arp_entry_t *arp_entry = rte_malloc("arp entry", sizeof(arp_entry_t), 0);
     arp_entry->state = state;
     arp_entry->ipv4_addr = ipv4;
     if (mac)

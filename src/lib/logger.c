@@ -4,6 +4,8 @@
 #include <stdarg.h>
 #include <string.h>
 
+#include <rte_malloc.h>
+
 #define LOG_FILE "dpdkgtpv1.log"
 
 struct LoggerFeature *enable_feature;
@@ -11,8 +13,7 @@ struct LoggerFeature *enable_feature;
 void
 logger_init(void)
 {
-    enable_feature = calloc(LOG_ALL_Features, sizeof(struct LoggerFeature));
-    memset(enable_feature, 0, sizeof(struct LoggerFeature));
+    enable_feature = rte_calloc("enable feature", LOG_ALL_Features, sizeof(struct LoggerFeature), 0);
 
     logger_enable_trace(LOG_APP, L_ALL);
     logger_enable_trace(LOG_ARP, L_ALL);

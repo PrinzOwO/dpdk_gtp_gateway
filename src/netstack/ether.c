@@ -6,7 +6,9 @@
 
 #include <stdio.h>
 #include <string.h>
+
 #include <rte_common.h>
+#include <rte_malloc.h>
 
 #include "arp.h"
 
@@ -15,7 +17,7 @@ interface_t *port_iface_map[MAX_INTERFACES] = {0};
 
 void add_interface(interface_t *iface)
 {
-    interface_t *ptr = malloc(sizeof(interface_t));
+    interface_t *ptr = rte_malloc("interface", sizeof(interface_t), 0);
 
     memcpy(ptr, iface, sizeof(interface_t));
     ptr->next = NULL;
