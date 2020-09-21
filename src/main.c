@@ -52,6 +52,11 @@ int main(int argc, char **argv)
     signal(SIGUSR1, sig_extra_stats);
     signal(SIGUSR2, sig_config);
 
+    // APP init
+    ret = app_init(0);
+    if (ret < 0)
+        rte_exit(EXIT_FAILURE, "\n ERROR: failed to init app\n");
+
     // Load ini config file
     ret = load_config();
     if (ret < 0)
@@ -305,7 +310,7 @@ static __rte_always_inline void process_pkt_mbuf(struct rte_mbuf *m, uint8_t por
                 }
 
                 // GTP decap
-                if (likely(process_gtpv1(m, port, gtp1_hdr) > 0)) {
+                if (likely(process_gtpu(m, port, gtp1_hdr) > 0)) {
                     return;
                 } else {
                     printf_dbg(" ERR(decap failed)\n");
