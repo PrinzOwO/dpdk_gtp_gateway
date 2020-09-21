@@ -25,6 +25,19 @@ print_rte_ipv4_dbg(
 }
 
 /**
+ * Check and convert string to integer
+ */
+static __rte_always_inline int str_to_int(const char *string)
+{
+    uint16_t len = strlen(string);
+    for (int i = 0; i < len; i++)
+        if ((isdigit(string[i]) == 0))
+            return -1;
+
+    return atoi(string);
+}
+
+/**
  * Convert IPv4 address from big endian to xx.xx.xx.xx.
  */
 static __rte_always_inline void print_ipv4(rte_be32_t ipv4, TraceLevel trace_level)
