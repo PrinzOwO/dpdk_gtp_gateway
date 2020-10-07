@@ -46,38 +46,6 @@
 #define STRCMP(x, y) strcmp((const char *)x, (const char *)y)
 #define STRNCMP(x, y, n) strncmp((const char *)x, (const char *)y, n)
 
-typedef struct confg_gtp_port_s {
-    uint8_t port_num;
-    // char ipv4[INET_ADDRSTRLEN];
-    uint32_t ipv4;
-    uint8_t gtp_type;
-    uint8_t pkt_index;
-} confg_gtp_port_t;
-
-typedef struct confg_gtp_tunnel_s {
-    uint8_t id;
-    uint32_t teid_in;
-    uint32_t teid_out;
-    uint32_t ue_ipv4;
-    uint32_t ran_ipv4;
-} confg_gtp_tunnel_t;
-
-typedef struct app_confg_s {
-    uint8_t disp_stats;
-
-    uint8_t gtp_port_count;
-    confg_gtp_port_t gtp_ports[GTP_CFG_MAX_PORTS];
-    struct rte_hash *gtp_port_hash; // [port_num] = *gtp_port
-
-    uint8_t gtp_tunnel_count;
-    confg_gtp_tunnel_t gtp_tunnels[GTP_CFG_MAX_TUNNELS];
-    struct rte_hash *teid_in_hash; // [teid_in] = *gtp_tunnel
-    struct rte_hash *ue_ipv4_hash; // [ue_ipv4] = *gtp_tunnel
-
-    uint8_t static_arp_count;
-    arp_entry_t static_arps[GTP_CFG_MAX_ARPS];
-} app_confg_t;
-
 int32_t load_config(void);
 
 #endif /*__CONFIG_H__*/

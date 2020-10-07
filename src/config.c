@@ -72,7 +72,7 @@ static int load_interface_entries(struct rte_cfgfile *file, const char *section_
         }
     } /* iterate entries */
 
-    return app_add_gtp_port(port_num, ipv4, gtp_type);
+    return ether_add_interface(port_num, ipv4, gtp_type);
 }
 
 static int load_tunnel_entries(struct rte_cfgfile *file, const char *section_name)
@@ -136,10 +136,18 @@ static int load_arp_entries(struct rte_cfgfile *file, const char *section_name)
         printf("\n %15s : %-15s", entries[j].name, entries[j].value);
 
         if (STRCMP("ipv4", entries[j].name) == 0) {
-            ipv4 = inet_addr(entries[j].value);
+            if (inet_pton(AF_INET, entries[j].value, &ipv4) != 1)
+                rte_exit(EXIT_FAILURE, "\n ERROR: cannot translate ipv4 '%s' in config\n", entries[j].value);
+
+            if (!ipv4)
+                rte_exit(EXIT_FAILURE, "\n ERROR: cannot add static arp with zero ipv4\n");
         }
         else if (STRCMP("mac", entries[j].name) == 0) {
-            rte_ether_format_addr(entries[j].value, strlen(entries[j].value), &mac);
+            if (ether_unformat_addr(entries[j].value, &mac) < 0)
+                rte_exit(EXIT_FAILURE, "\n ERROR: cannot translate mac address '%s' in config\n", entries[j].value);
+            
+            if (rte_is_zero_ether_addr(&mac))
+                rte_exit(EXIT_FAILURE, "\n ERROR: cannot add static arp with zero mac\n");
         }
         else {
             printf("\n ERROR: unexpected entry %s with value %s\n",
@@ -149,12 +157,6 @@ static int load_arp_entries(struct rte_cfgfile *file, const char *section_name)
         }
     } /* iterate entries */
 
-    if (!ipv4)
-        rte_exit(EXIT_FAILURE, "\n ERROR: cannot add static arp with zero ipv4\n");
-
-    if (rte_is_zero_ether_addr(&mac))
-        rte_exit(EXIT_FAILURE, "\n ERROR: cannot add static arp with zero mac\n");
-
     return arp_add_mac(ipv4, &mac, ARP_STATE_PERMANENT);
 }
 
@@ -163,8 +165,6 @@ int32_t load_config(void)
     struct rte_cfgfile *file = NULL;
     int32_t ret;
     char **section_names = NULL;
-
-    app_init(0);
 
     file = rte_cfgfile_load(GTP_CFG_FILE, 0);
     if (file == NULL)
