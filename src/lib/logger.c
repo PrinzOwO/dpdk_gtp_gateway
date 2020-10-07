@@ -4,7 +4,7 @@
 #include <stdarg.h>
 #include <string.h>
 
-#include <rte_malloc.h>
+#include <rte_common.h>
 
 #define LOG_FILE "dpdkgtpv1.log"
 
@@ -13,11 +13,13 @@ struct LoggerFeature *enable_feature;
 void
 logger_init(void)
 {
-    enable_feature = rte_calloc("enable feature", LOG_ALL_Features, sizeof(struct LoggerFeature), 0);
+    enable_feature = calloc(LOG_ALL_Features, sizeof(struct LoggerFeature));
+    if (!enable_feature)
+        rte_exit(EXIT_FAILURE, "\n ERROR: no memory for enable_feature\n");
 
     logger_enable_trace(LOG_APP, L_ALL);
     logger_enable_trace(LOG_ARP, L_ALL);
-    // logger_enable_trace(LOG_ETHER, L_ALL);
+    logger_enable_trace(LOG_ETHER, L_ALL);
     logger_enable_trace(LOG_GTP, L_ALL);
     // logger_enable_trace(LOG_LIB, L_ALL);
 }

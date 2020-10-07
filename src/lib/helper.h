@@ -38,6 +38,21 @@ static __rte_always_inline int str_to_int(const char *string)
 }
 
 /**
+ * Check and convert Hex char to integer
+ */
+static __rte_always_inline int xchar_to_int(const char xchar)
+{
+    if (xchar >= '0' && xchar <= '9')
+        return xchar - '0';
+    else if (xchar >= 'A' && xchar <= 'F')
+        return xchar - 'A' + 10;
+    else if (xchar >= 'a' && xchar <= 'f')
+        return xchar - 'a' + 10;
+    else
+        return -1;
+}
+
+/**
  * Convert IPv4 address from big endian to xx.xx.xx.xx.
  */
 static __rte_always_inline void print_ipv4(rte_be32_t ipv4, TraceLevel trace_level)

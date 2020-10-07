@@ -7,9 +7,6 @@
 /* GLOBALS */
 numa_info_t numa_node_info[GTP_MAX_NUMANODE];
 
-/* EXTERN */
-extern app_confg_t app_config;
-
 static const struct rte_eth_conf portConf = {
     .rxmode = {
         // .offloads = DEV_RX_OFFLOAD_CHECKSUM,
@@ -56,13 +53,13 @@ populate_node_info(void)
     for (i = 0; i < portCount; i++) {
         rte_eth_dev_info_get(i, &devInfo);
         rte_eth_macaddr_get(i, &addr);
-
+/*
         if (rte_hash_lookup(app_config.gtp_port_hash, &i) >= 0) {
             printf("\n [Interface %d *GTPGW*]", i);
         } else {
             printf("\n [Interface %d]", i);
         }
-
+*/
         printf("\n - Driver: %s", devInfo.driver_name);
         printf("\n - If index: %d", devInfo.if_index);
         printf("\n - MAC: %02" PRIx8 ":%02" PRIx8 ":%02" PRIx8

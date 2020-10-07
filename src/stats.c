@@ -9,13 +9,12 @@ static struct rte_timer displayStats;
 uint8_t doStatsDisplay = 1;
 
 /* EXTERN */
-extern app_confg_t app_config;
 extern numa_info_t numa_node_info[GTP_MAX_NUMANODE];
 
 void
 sig_extra_stats(__attribute__((unused)) int signo)
 {
-    int32_t i = 0, ports = rte_eth_dev_count_avail();
+    int32_t i = 0;
 
     doStatsDisplay = 0;
 
@@ -44,15 +43,9 @@ sig_extra_stats(__attribute__((unused)) int signo)
     printf("\033[30;1H");
     printf(BLUE "*************************************************" RESET);
 
-    for (; i < ports; i++) {
-        printf("\033[2;%dH", (15 + 10 * i));
-        printf(" %8u ", i);
-        printf("\033[11;%dH", (15 + 10 * i));
-        printf(" %8u ", app_config.gtp_ports[i].gtp_type);
-        printf("\033[13;%dH", (15 + 10 * i));
-        printf(" %8u ", app_config.gtp_ports[i].pkt_index); // not used
-    }
+    ether_dump_status();
 
+    // TODO: Do NOT use extern
     for (i = 0; i < GTP_MAX_NUMANODE; i++) {
         printf("\033[18;%dH", (15 + 10 * i));
         printf(" %8u ", i);
