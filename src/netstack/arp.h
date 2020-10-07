@@ -13,6 +13,7 @@
 #include <rte_arp.h>
 
 #include "logger.h"
+#include "ether.h"
 
 #define MAX_ARP_ENTRIES 8192
 
@@ -118,9 +119,10 @@ int arp_add_mac(rte_be32_t ipv4, struct rte_ether_addr *mac, int permanent);
 /**
  * Dump ARP table
  */
-void arp_print_table(TraceLevel trace_level);
+void arp_dump_table(TraceLevel trace_level);
 
 int arp_init(int with_locks);
+
 int arp_terminate(void);
 
 #endif /* __ARP_H_ */
