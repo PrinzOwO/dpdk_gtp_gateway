@@ -13,6 +13,11 @@ void app_set_disp_stats(uint8_t disp_stats)
     app_ctx.disp_stats = disp_stats;
 }
 
+uint8_t app_get_disp_stats(void)
+{
+    return app_ctx.disp_stats;
+}
+
 int app_init(int with_locks)
 {
     if (ether_interface_init(with_locks))

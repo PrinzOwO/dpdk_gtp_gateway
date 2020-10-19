@@ -23,4 +23,6 @@ int app_init(int with_locks);
 
 void app_set_disp_stats(uint8_t disp_stats);
 
+uint8_t app_get_disp_stats(void);
+
 #endif /* __DPDK_GTP_GW_APP_H__ */
