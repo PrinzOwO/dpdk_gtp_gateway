@@ -20,6 +20,8 @@ typedef struct interface_s {
     uint8_t pkt_index;
 } interface_t;
 
+interface_t *ether_get_next_interface(int now_order);
+
 int ether_add_interface(uint8_t id, rte_be32_t ipv4, uint8_t gtp_type);
 
 int ether_find_interface_by_id(const void *key, interface_t **data);

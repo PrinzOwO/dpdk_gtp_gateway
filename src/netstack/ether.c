@@ -24,6 +24,15 @@ struct rte_hash *interface_id_hash = NULL;
 struct rte_hash *interface_mac_hash = NULL;
 struct rte_hash *interface_ipv4_hash = NULL;
 
+interface_t *ether_get_next_interface(int now_order)
+{
+    int next_order = now_order + 1;
+    if (likely(next_order >= 0 && next_order < interface_count))
+        return &interface_ports[next_order];
+    
+    return NULL;
+}
+
 static __rte_always_inline struct rte_hash *ether_hash_table_create(const char *name,
         uint32_t entries, uint8_t key_len, uint8_t extra_flag)
 {
@@ -50,7 +59,7 @@ int ether_add_interface(uint8_t id, rte_be32_t ipv4, uint8_t gtp_type)
     uint8_t avail_dev_count = rte_eth_dev_count_avail();
 
     if (id > rte_eth_dev_count_avail()) {
-        logger(LOG_APP, L_CRITICAL,
+        logger(LOG_ETHER, L_CRITICAL,
                 "Interface index #%d in config >= avail dpdk eth devices (%d).\n",
                 id, avail_dev_count);
         return -1;
@@ -121,11 +130,11 @@ void ether_dump_interface(TraceLevel trace_level)
         logger_s(LOG_ETHER, trace_level, "\n");
 
         logger_s(LOG_ETHER, trace_level, "   IP = ");
-        print_ipv4(interface_ports[i].ipv4, trace_level);
+        logger_ipv4(interface_ports[i].ipv4, trace_level);
         logger_s(LOG_ETHER, trace_level, "\n");
 
         logger_s(LOG_ETHER, trace_level, "   MAC = ");
-        print_mac(&interface_ports[i].mac, trace_level);
+        logger_mac(&interface_ports[i].mac, trace_level);
         logger_s(LOG_ETHER, trace_level, "\n");
 
         logger_s(LOG_ETHER, trace_level, "   Type = %s", (interface_ports[i].gtp_type == 1 ? "GTP-U" : "Internet"));
