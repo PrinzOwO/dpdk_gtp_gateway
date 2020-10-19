@@ -53,26 +53,49 @@ static __rte_always_inline int xchar_to_int(const char xchar)
 }
 
 /**
- * Convert IPv4 address from big endian to xx.xx.xx.xx.
+ * Convert IPv4 address from big endian to xx.xx.xx.xx and output with logger_s.
  */
-static __rte_always_inline void print_ipv4(rte_be32_t ipv4, TraceLevel trace_level)
+static __rte_always_inline void logger_ipv4(rte_be32_t ipv4, TraceLevel trace_level)
 {
-    logger_s(LOG_ARP, trace_level, "%u.%u.%u.%u",
+    logger_s(LOG_IP, trace_level, "%u.%u.%u.%u",
          (ipv4 & 0xff), ((ipv4 >> 8) & 0xff),
          ((ipv4 >> 16) & 0xff), (ipv4 >> 24));
 }
 
 /**
- * Convert MAC address from 48bits Ethernet address to xx:xx:xx:xx:xx:xx.
+ * Convert IPv4 address from big endian to xx.xx.xx.xx and output with printf_dbg.
  */
-static __rte_always_inline void print_mac(struct rte_ether_addr *mac, TraceLevel trace_level)
+static __rte_always_inline void print_dbg_ipv4(rte_be32_t ipv4)
+{
+    printf_dbg("%u.%u.%u.%u",
+         (ipv4 & 0xff), ((ipv4 >> 8) & 0xff),
+         ((ipv4 >> 16) & 0xff), (ipv4 >> 24));
+}
+
+/**
+ * Convert MAC address from 48bits Ethernet address to xx:xx:xx:xx:xx:xx and output with logger_s.
+ */
+static __rte_always_inline void logger_mac(struct rte_ether_addr *mac, TraceLevel trace_level)
 {
     int i;
     for (i = 0; i < RTE_ETHER_ADDR_LEN - 1; i++) {
-        logger_s(LOG_ARP, trace_level, "%x:", mac->addr_bytes[i]);
+        logger_s(LOG_ETHER, trace_level, "%x:", mac->addr_bytes[i]);
     }
 
-    logger_s(LOG_ARP, trace_level, "%x", mac->addr_bytes[i]);
+    logger_s(LOG_ETHER, trace_level, "%x", mac->addr_bytes[i]);
+}
+
+/**
+ * Convert MAC address from 48bits Ethernet address to xx:xx:xx:xx:xx:xx and output with printf_dbg.
+ */
+static __rte_always_inline void printf_dbg_mac(struct rte_ether_addr *mac)
+{
+    int i;
+    for (i = 0; i < RTE_ETHER_ADDR_LEN - 1; i++) {
+        printf_dbg("%x:", mac->addr_bytes[i]);
+    }
+
+    printf_dbg("%x", mac->addr_bytes[i]);
 }
 
 

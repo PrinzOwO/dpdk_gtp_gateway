@@ -18,6 +18,7 @@
 typedef enum {
     LOG_APP,
     LOG_ARP,
+    LOG_IP,
     LOG_ETHER,
     LOG_GTP,
     LOG_LIB,
