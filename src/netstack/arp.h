@@ -76,7 +76,7 @@ void arp_header_prepend(struct rte_mbuf *mbuf,
  *   - 0 if handled successfully
  *   - A negative number if error occurred
  */
-int arp_in(struct rte_mbuf *mbuf);
+int arp_in(struct rte_mbuf *mbuf, interface_t *interface);
 
 /**
  * Send ARP request with a new space
@@ -95,7 +95,7 @@ int arp_send_request(rte_be32_t dst_ip, uint8_t port);
  *   - A negative number if error occurred
  */
 int arp_send_reply(rte_be32_t src_ip,
-        struct rte_ether_addr *dst_mac, rte_be32_t dst_ip);
+        interface_t *src_int, struct rte_ether_addr *dst_mac, rte_be32_t dst_ip);
 
 /**
  * Get MAC by network type IPv4 address

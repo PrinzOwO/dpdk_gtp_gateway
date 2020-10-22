@@ -91,11 +91,16 @@ int ether_add_interface(uint8_t id, rte_be32_t ipv4, uint8_t gtp_type)
             &interface_ports[int_idx]))
         goto HASH_TABLE_MAC_INT_REMOVE;
 
+    if (rte_hash_add_key_data(interface_ipv4_hash,
+            &interface_ports[int_idx].ipv4,
+            &interface_ports[int_idx]))
+        goto HASH_TABLE_ID_INT_REMOVE;
+
     return 0;
-/*
+
 HASH_TABLE_ID_INT_REMOVE:
     rte_hash_del_key(interface_id_hash, &interface_ports[int_idx].id);
-*/
+
 HASH_TABLE_MAC_INT_REMOVE:
     rte_hash_del_key(interface_mac_hash, &interface_ports[int_idx].mac);
 

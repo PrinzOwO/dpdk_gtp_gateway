@@ -26,7 +26,7 @@ static struct rte_hash *arp_table = NULL; // [rte_be32_t ipv4_addr] = (arp_entry
 static __rte_always_inline struct rte_hash *arp_table_create(const char *name, uint32_t entries, uint8_t extra_flag);
 static __rte_always_inline void arp_table_destroy(struct rte_hash *arp_table);
 
-static __rte_always_inline int arp_send_reply_inplace(struct rte_mbuf *m, uint32_t src_ip_addr, struct rte_arp_hdr *arp_hdr);
+static __rte_always_inline int arp_send_reply_inplace(struct rte_mbuf *m, interface_t *interface, uint32_t src_ip_addr, struct rte_arp_hdr *arp_hdr);
 static __rte_always_inline int arp_send(struct rte_mbuf *mbuf, uint8_t port);
 static __rte_always_inline int arp_add(uint32_t ipv4_addr, struct rte_ether_addr *mac_addr, arp_state_t state);
 static __rte_always_inline int arp_update(uint32_t ipv4_addr, struct rte_ether_addr *mac_addr, arp_state_t prev_state, arp_state_t new_state);
@@ -49,34 +49,33 @@ int arp_terminate(void)
     return 0;
 }
 
-int arp_in(struct rte_mbuf *mbuf)
+int arp_in(struct rte_mbuf *mbuf, interface_t *interface)
 {
     int ret;
 
     // Length of ARP frame should be larger than (ethernet frame + arp header)
-    if (unlikely(rte_pktmbuf_data_len(mbuf) < (sizeof(struct rte_arp_hdr) + sizeof(struct rte_ether_hdr)))) {
+    if (unlikely(rte_pktmbuf_data_len(mbuf) < (sizeof(struct rte_arp_hdr) + RTE_ETHER_HDR_LEN))) {
         logger(LOG_ARP, L_INFO, "[ARP Frame] Length of ARP is not enough, drop it\n");
         ret = -1;
         goto PKTMBUF_FREE;
     }
 
-    struct rte_arp_hdr *arp_hdr = (rte_pktmbuf_mtod_offset(mbuf, struct rte_arp_hdr *, sizeof(struct rte_ether_hdr)));
+    struct rte_arp_hdr *arp_hdr = (rte_pktmbuf_mtod_offset(mbuf, struct rte_arp_hdr *, RTE_ETHER_HDR_LEN));
     struct rte_arp_ipv4 *arp_data = &arp_hdr->arp_data;
 
     switch (rte_be_to_cpu_16(arp_hdr->arp_opcode)) {
         case ARP_REQ: {
             logger_s(LOG_ARP, L_INFO, "\n");
             logger(LOG_ARP, L_INFO, "[ARP Request] Who has ");
-            print_ipv4(arp_data->arp_tip, L_DEBUG);
+            logger_ipv4(arp_data->arp_tip, L_DEBUG);
             logger_s(LOG_ARP, L_INFO, "  Tell ");
-            print_ipv4(arp_data->arp_sip, L_DEBUG);
+            logger_ipv4(arp_data->arp_sip, L_DEBUG);
             logger_s(LOG_ARP, L_DEBUG, "\n");
 
             arp_add_mac(arp_data->arp_sip, &arp_data->arp_sha, 0);
-            arp_dump_table(L_DEBUG);
             logger_s(LOG_ARP, L_DEBUG, "\n");
 
-            ret = arp_send_reply_inplace(mbuf, arp_data->arp_tip, arp_hdr);
+            ret = arp_send_reply_inplace(mbuf, interface, arp_data->arp_tip, arp_hdr);
 
             if (unlikely(ret != 0))
                 goto PKTMBUF_FREE;
@@ -86,9 +85,9 @@ int arp_in(struct rte_mbuf *mbuf)
         case ARP_REPLY: {
             logger_s(LOG_ARP, L_INFO, "\n");
             logger(LOG_ARP, L_INFO, "[ARP Reply] ");
-            print_ipv4(arp_data->arp_sip, L_DEBUG);
+            logger_ipv4(arp_data->arp_sip, L_DEBUG);
             logger_s(LOG_ARP, L_INFO, "  is at ");
-            print_mac(&arp_data->arp_sha, L_DEBUG);
+            logger_mac(&arp_data->arp_sha, L_DEBUG);
             logger_s(LOG_ARP, L_DEBUG, "\n");
 
             // Check if dst mac is hosted
@@ -105,7 +104,6 @@ int arp_in(struct rte_mbuf *mbuf)
             if (unlikely(ret != 0))
                 goto PKTMBUF_FREE;
 
-            arp_dump_table(L_DEBUG);
             logger_s(LOG_ARP, L_DEBUG, "\n");
             rte_pktmbuf_free(mbuf);
             break;
@@ -173,9 +171,9 @@ int arp_send_request(rte_be32_t dst_ip, uint8_t port)
 
     logger_s(LOG_ARP, L_DEBUG, "\n");
     logger(LOG_ARP, L_DEBUG, "<ARP Request> Who has ");
-    print_ipv4(dst_ip, L_DEBUG);
+    logger_ipv4(dst_ip, L_DEBUG);
     logger_s(LOG_ARP, L_INFO, "  Tell ");
-    print_ipv4(iface->ipv4, L_DEBUG);
+    logger_ipv4(iface->ipv4, L_DEBUG);
 
     struct rte_mbuf *mbuf = get_mbuf();
     if (unlikely(mbuf == NULL))
@@ -192,12 +190,14 @@ int arp_send_request(rte_be32_t dst_ip, uint8_t port)
 }
 
 static __rte_always_inline int arp_send_reply_inplace(struct rte_mbuf *m,
-        rte_be32_t src_ip, struct rte_arp_hdr *arp_hdr)
+        interface_t *src_int, rte_be32_t src_ip, struct rte_arp_hdr *arp_hdr)
 {
     interface_t *iface = NULL;
 
     if (unlikely(ether_find_interface_by_ipv4(&src_ip, &iface) < 0)) {
-        logger(LOG_ARP, L_INFO, "ARP request failed, address not hosted\n");
+        logger(LOG_ARP, L_INFO, "ARP request failed, address ");
+        logger_ipv4(src_ip, L_INFO);
+        logger_s(LOG_ARP, L_INFO, " not hosted\n");
         return -1;
     }
 
@@ -216,14 +216,14 @@ static __rte_always_inline int arp_send_reply_inplace(struct rte_mbuf *m,
     arp_data->arp_sip = src_ip;
 
     logger(LOG_ARP, L_DEBUG, "<ARP Reply> ");
-    print_ipv4(src_ip, L_DEBUG);
+    logger_ipv4(src_ip, L_DEBUG);
     logger_s(LOG_ARP, L_DEBUG, "  is at ");
-    print_mac(&iface->mac, L_DEBUG);
+    logger_mac(&iface->mac, L_DEBUG);
 
     // TODO: fix the below, port should be dfrom routing
     logger_s(LOG_ARP, L_DEBUG, " [TX#%d]", iface->id);
     const int queue_id = 0;
-    const int ret = rte_eth_tx_burst(iface->id, queue_id, &m, 1);
+    const int ret = rte_eth_tx_burst(src_int->id, queue_id, &m, 1);
     if (unlikely(ret != 1)) {
         logger_s(LOG_ARP, L_CRITICAL, " ERR(rte_eth_tx_burst=%d)\n", ret);
         return -1;
@@ -234,7 +234,7 @@ static __rte_always_inline int arp_send_reply_inplace(struct rte_mbuf *m,
 }
 
 int arp_send_reply(rte_be32_t src_ip,
-        struct rte_ether_addr *dst_mac, rte_be32_t dst_ip)
+        interface_t *src_int, struct rte_ether_addr *dst_mac, rte_be32_t dst_ip)
 {
     interface_t *iface = NULL;
 
@@ -251,11 +251,11 @@ int arp_send_reply(rte_be32_t src_ip,
     arp_header_set_inplace(arp_reply, &iface->mac, dst_mac, src_ip, dst_ip, RTE_ARP_OP_REPLY);
 
     logger(LOG_ARP, L_DEBUG, "<ARP Reply> ");
-    print_ipv4(src_ip, L_DEBUG);
+    logger_ipv4(src_ip, L_DEBUG);
     logger_s(LOG_ARP, L_DEBUG, "  is at ");
-    print_mac(&iface->mac, L_DEBUG);
+    logger_mac(&iface->mac, L_DEBUG);
 
-    int ret = arp_send(mbuf, iface->id);
+    int ret = arp_send(mbuf, src_int->id);
     if (likely(ret == 0))
         return 0;
 
@@ -269,7 +269,7 @@ static __rte_always_inline int arp_send(struct rte_mbuf *mbuf, uint8_t port)
 
     struct rte_arp_hdr *arp_hdr = rte_pktmbuf_mtod(mbuf, struct rte_arp_hdr *);
     struct rte_ether_hdr *eth =
-        (struct rte_ether_hdr *) rte_pktmbuf_prepend(mbuf, sizeof(struct rte_ether_hdr));
+        (struct rte_ether_hdr *) rte_pktmbuf_prepend(mbuf, RTE_ETHER_HDR_LEN);
 
     if (arp_hdr->arp_opcode == rte_be_to_cpu_16(ARP_REQ)) {
         ethernet_header_set_inplace(eth,
@@ -318,9 +318,9 @@ int arp_add_mac(rte_be32_t ipv4, struct rte_ether_addr *mac, int permanent)
     logger_s(LOG_ARP, L_DEBUG, "\n");
 
     logger(LOG_ARP, L_DEBUG, "Adding to arp table: IP ");
-    print_ipv4(ipv4, L_DEBUG);
+    logger_ipv4(ipv4, L_DEBUG);
     logger_s(LOG_ARP, L_DEBUG, " MAC ");
-    print_mac(mac, L_DEBUG);
+    logger_mac(mac, L_DEBUG);
     logger_s(LOG_ARP, L_DEBUG, "\n");
 
     return arp_add(ipv4, mac, permanent ? ARP_STATE_PERMANENT : ARP_STATE_REACHABLE);
@@ -368,11 +368,11 @@ void arp_dump_table(TraceLevel trace_level)
 
     while (rte_hash_iterate(arp_table, (void *)&ipv4, (void **)&arp_entry, &iter) >= 0) {
         logger_s(LOG_ARP, trace_level, " - IP = ");
-        print_ipv4(*ipv4, trace_level);
+        logger_ipv4(*ipv4, trace_level);
         logger_s(LOG_ARP, trace_level, "\n");
 
         logger_s(LOG_ARP, trace_level, "   MAC = ");
-        print_mac(&arp_entry->mac_addr, trace_level);
+        logger_mac(&arp_entry->mac_addr, trace_level);
         logger_s(LOG_ARP, trace_level, "\n");
 
         logger_s(LOG_ARP, trace_level, "   STATE = ");

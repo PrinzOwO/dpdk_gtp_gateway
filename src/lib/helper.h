@@ -79,10 +79,10 @@ static __rte_always_inline void logger_mac(struct rte_ether_addr *mac, TraceLeve
 {
     int i;
     for (i = 0; i < RTE_ETHER_ADDR_LEN - 1; i++) {
-        logger_s(LOG_ETHER, trace_level, "%x:", mac->addr_bytes[i]);
+        logger_s(LOG_ETHER, trace_level, "%02x:", mac->addr_bytes[i]);
     }
 
-    logger_s(LOG_ETHER, trace_level, "%x", mac->addr_bytes[i]);
+    logger_s(LOG_ETHER, trace_level, "%02x", mac->addr_bytes[i]);
 }
 
 /**
@@ -92,10 +92,10 @@ static __rte_always_inline void printf_dbg_mac(struct rte_ether_addr *mac)
 {
     int i;
     for (i = 0; i < RTE_ETHER_ADDR_LEN - 1; i++) {
-        printf_dbg("%x:", mac->addr_bytes[i]);
+        printf_dbg("%02x:", mac->addr_bytes[i]);
     }
 
-    printf_dbg("%x", mac->addr_bytes[i]);
+    printf_dbg("%02x", mac->addr_bytes[i]);
 }
 
 
