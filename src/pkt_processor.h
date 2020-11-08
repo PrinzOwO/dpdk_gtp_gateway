@@ -69,7 +69,38 @@ static __rte_always_inline int process_frame_and_send(struct rte_mbuf *m, mbuf_n
  *   - 0 if packet processes successfully
  *   - < 0 if packet processes failed, need to free this packet from caller
  */
-static __rte_always_inline int process_outer_hdr_creation(struct rte_mbuf *m, mbuf_network_info_t *network_info, rule_action_t *rule_action, uint8_t out_int)
+static __rte_always_inline int process_outer_hdr_removal(struct rte_mbuf *m,
+        mbuf_network_info_t *network_info, rule_match_t *rule_match)
+{
+    switch(rule_match->remove_hdr) {
+        case RULE_MATCH_REMOVE_HDR_COOKED_GTPU_IPV4:
+            printf_dbg(", remove GTP-U, UDP, IPv4 and ethernet hdr");
+            network_info->ipv4_hdr = (struct rte_ipv4_hdr *) rte_pktmbuf_adj(m,
+                    (uint8_t *) network_info->origin.ipv4_hdr - (uint8_t *) network_info->eth_hdr);
+            return 0;
+        case RULE_MATCH_REMOVE_HDR_COOKED_UNSPEC: // No existed outer header removal
+            printf_dbg(", remove ethernet hdr");
+            rte_pktmbuf_adj(m, RTE_ETHER_HDR_LEN);
+            // network_info->eth_hdr = NULL;
+            return 0;
+        case RULE_MATCH_REMOVE_HDR_COOKED_UDP_IPV4:
+            printf_dbg(", remove UDP, IPv4 and ethernet hdr");
+            // TODO: maintain network_info pointer
+            // rte_pktmbuf_adj(m, (uint8_t *) network_info->gtp_hdr - (uint8_t *) network_info->eth_hdr);
+            return -EPROTONOSUPPORT;
+        default:
+            printf_dbg(", not support IPv6 hdr yet");
+            return -EPROTONOSUPPORT;
+    }
+}
+
+/**
+ * @return
+ *   - 0 if packet processes successfully
+ *   - < 0 if packet processes failed, need to free this packet from caller
+ */
+static __rte_always_inline int process_outer_hdr_creation(struct rte_mbuf *m,
+        mbuf_network_info_t *network_info, rule_action_t *rule_action, uint8_t out_int)
 {
     uint16_t payload_len, prepare_hdr_len;
     switch(rule_action->outer_hdr_info.desp) {
@@ -79,6 +110,7 @@ static __rte_always_inline int process_outer_hdr_creation(struct rte_mbuf *m, mb
             // ethernet hdr will be handled at send function
             return 0;
         case RULE_ACTION_OUTER_HDR_DESP_GTPU_IPV4: 
+            printf_dbg(", don't create outer gtp-u, udp and ipv4 hdr");
             prepare_hdr_len = RTE_ETHER_GTP_HLEN + sizeof(struct rte_ipv4_hdr) + sizeof(struct rte_ether_hdr);
             network_info->eth_hdr = (struct rte_ether_hdr *) rte_pktmbuf_prepend(m, prepare_hdr_len);
             // ethernet hdr will be handled at send function
@@ -137,29 +169,13 @@ static __rte_always_inline int process_gtpu_forward(struct rte_mbuf *m,
         }
     }
     else {
-        switch(rule_match->remove_hdr) {
-            case RULE_MATCH_REMOVE_HDR_COOKED_GTPU_IPV4:
-                printf_dbg(", remove GTP-U, UDP, IPv4 and ethernet hdr");
-                network_info->ipv4_hdr = (struct rte_ipv4_hdr *) rte_pktmbuf_adj(m,
-                        (uint8_t *) network_info->origin.ipv4_hdr - (uint8_t *) network_info->eth_hdr);
-                break;
-            case RULE_MATCH_REMOVE_HDR_COOKED_UNSPEC: // No existed outer header removal
-                printf_dbg(", remove ethernet hdr");
-                // TODO: maintain network_info pointer
-                // rte_pktmbuf_adj(m, RTE_ETHER_HDR_LEN);
-                break;
-            case RULE_MATCH_REMOVE_HDR_COOKED_UDP_IPV4:
-                printf_dbg(", remove UDP, IPv4 and ethernet hdr");
-                // TODO: maintain network_info pointer
-                // rte_pktmbuf_adj(m, (uint8_t *) network_info->gtp_hdr - (uint8_t *) network_info->eth_hdr);
-                break;
-            default:
-                printf_dbg(", not support IPv6 hdr yet");
-                return -EPROTONOSUPPORT;
+        if (unlikely((ret = process_outer_hdr_removal(m, network_info, rule_match)) < 0)) {
+            printf_dbg(", ERROR: cannot handle outer hdr removal");
+            return ret;
         }
 
         if (unlikely((ret = process_outer_hdr_creation(m, network_info, rule_action, n6_interface)) < 0)) {
-            printf_dbg(", ERROR: cannot outer hdr creation");
+            printf_dbg(", ERROR: cannot handle outer hdr creation");
             return ret;
         }
     }
@@ -210,7 +226,7 @@ static __rte_always_inline int process_gtpu(struct rte_mbuf *m, mbuf_network_inf
  *   - < 0 if packet processes failed, need to free this packet from caller
  */
 static __rte_always_inline int process_ipv4_forward(struct rte_mbuf *m,
-        mbuf_network_info_t *network_info, /* rule_match_t *rule_match, */ rule_action_t *rule_action)
+        mbuf_network_info_t *network_info, rule_match_t *rule_match, rule_action_t *rule_action)
 {
     int ret;
 
@@ -218,10 +234,15 @@ static __rte_always_inline int process_ipv4_forward(struct rte_mbuf *m,
     uint8_t gtpu_interface = network_info->interface->id ^ 1;
     // uint8_t n6_interface = network_info->interface->id;
 
-    // TODO: Care outer hdr removal?
+    if (unlikely((ret = process_outer_hdr_removal(m, network_info, rule_match)) < 0)) {
+        printf_dbg(", ERROR: cannot handle outer hdr removal");
+        return ret;
+    }
     
-    if (unlikely((ret = process_outer_hdr_creation(m, network_info, rule_action, gtpu_interface)) < 0))
-            return ret;
+    if (unlikely((ret = process_outer_hdr_creation(m, network_info, rule_action, gtpu_interface)) < 0)) {
+        printf_dbg(", ERROR: cannot handle outer hdr creation");
+        return ret;
+    }
 
     return process_frame_and_send(m, network_info, gtpu_interface);
 }
@@ -246,7 +267,7 @@ static __rte_always_inline int process_ipv4(struct rte_mbuf *m, mbuf_network_inf
     switch(rule_action->apply_action) {
         case RULE_ACTION_APPLY_ACTION_FORW:
             printf_dbg(" , need to forward");
-            return process_ipv4_forward(m, network_info, /*rule_match, */rule_action);
+            return process_ipv4_forward(m, network_info, rule_match, rule_action);
         case RULE_ACTION_APPLY_ACTION_DROP:
             printf_dbg(" , need to drop");
             rte_pktmbuf_free(m);
