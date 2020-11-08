@@ -1,5 +1,7 @@
 #include "stats.h"
 
+#include "interface.h"
+
 /* GLOBAL */
 pkt_stats_t port_pkt_stats[GTP_CFG_MAX_PORTS] = {0};
 
@@ -43,7 +45,7 @@ sig_extra_stats(__attribute__((unused)) int signo)
     printf("\033[30;1H");
     printf(BLUE "*************************************************" RESET);
 
-    ether_dump_status();
+    interface_dump_status();
 
     // TODO: Do NOT use extern
     for (i = 0; i < GTP_MAX_NUMANODE; i++) {

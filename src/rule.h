@@ -1,38 +1,35 @@
 #ifndef __DPDK_GTP_GW_RULE_H__
 #define __DPDK_GTP_GW_RULE_H__
 
+// TODO: thread safe
+
 #include <rte_byteorder.h>
+#include <pktbuf.h>
 
-/**
- * GTP header action from FAR
- */
-typedef struct rule_action_gtp_hdr_s {
-    rte_be32_t teid;
-} rule_action_gtp_hdr_t;
+#include "interface.h"
+#include "pkt.h"
 
-/**
- * IPv4 header add from FAR
- */
-typedef struct rule_action_ipv4_hdr_s {
-    rte_be32_t src_addr; // Default is rte_cpu_to_be_32(<interface IP>)
-    rte_be32_t dst_addr;
-} rule_action_ipv4_hdr_t;
+// Values for apply_action
+#define RULE_ACTION_APPLY_ACTION_UPSPEC             0x00
+#define RULE_ACTION_APPLY_ACTION_DROP               0x01
+#define RULE_ACTION_APPLY_ACTION_FORW               0x02
+#define RULE_ACTION_APPLY_ACTION_BUFF               0x04
+#define RULE_ACTION_APPLY_ACTION_MASK               0x07
+#define RULE_ACTION_APPLY_ACTION_NOCP               0x08
+#define RULE_ACTION_APPLY_ACTION_DUPL               0x10
 
-/**
- * Transport header add from FAR
- */
-typedef struct rule_action_l4port_hdr_s {
-    rte_be32_t src_port; // Default is rte_cpu_to_be_16(2152)
-    rte_be32_t dst_port;
-} rule_action_l4port_hdr_t;
+// Values for dst_interface
+#define RULE_ACTION_DST_INT_ACCESS                  0x0     // Uplink
+#define RULE_ACTION_DST_INT_CORE                    0x1     // Downlink
+#define RULE_ACTION_DST_INT_N6_LAN                  0x2
+#define RULE_ACTION_DST_INT_CP_FUNC                 0x3
 
-#define RULE_ACTION_APPLY_ACTION_UPSPEC 0x00
-#define RULE_ACTION_APPLY_ACTION_DROP   0x01
-#define RULE_ACTION_APPLY_ACTION_FORW   0x02
-#define RULE_ACTION_APPLY_ACTION_BUFF   0x04
-#define RULE_ACTION_APPLY_ACTION_MASK   0x07
-#define RULE_ACTION_APPLY_ACTION_NOCP   0x08
-#define RULE_ACTION_APPLY_ACTION_DUPL   0x10
+// Values for outer_hdr_info.desp
+#define RULE_ACTION_OUTER_HDR_DESP_UNSPEC           0x00
+#define RULE_ACTION_OUTER_HDR_DESP_GTPU_IPV4        0x10
+#define RULE_ACTION_OUTER_HDR_DESP_GTPU_IPV6        0x20
+#define RULE_ACTION_OUTER_HDR_DESP_UDP_IPV4         0x40
+#define RULE_ACTION_OUTER_HDR_DESP_UDP_IPV6         0x80
 
 /**
  * Action entries translated from FAR
@@ -40,61 +37,78 @@ typedef struct rule_action_l4port_hdr_s {
 typedef struct rule_action_s {
     uint32_t                    id;
     uint8_t                     apply_action;
+    uint8_t                     dst_int;
 
     // For outer header creation used now
-    rule_action_ipv4_hdr_t      ipv4;
-    rule_action_gtp_hdr_t       gtp;
-    rule_action_l4port_hdr_t    l4;
+    struct outer_hdr_info_t
+    {
+        rte_be16_t              desp;
+        rte_be32_t              teid;
+        rte_be32_t              peer_ipv4;
+        rte_be16_t              peer_port;
+    } outer_hdr_info;
 } rule_action_t;
 
-/**
- * GTP header matching from PDR
- */
-typedef struct rule_match_gtp_hdr_s {
-    rte_be32_t teid;
-} rule_match_gtp_hdr_t;
-
-/**
- * IPv4 header matching from PDR
- */
-typedef struct rule_match_ipv4_hdr_s {
-    uint8_t     next_proto_id;
-    rte_be32_t  src_addr;
-    rte_be32_t  dst_addr;
-} rule_match_ipv4_hdr_t;
-
-/**
- * Transport header matching from PDR
- */
-typedef struct rule_match_l4port_hdr_s {
-    rte_le32_t  port_low;
-    rte_le32_t  port_high;
-} rule_match_l4port_hdr_t;
+// Values for origin remove_hdr, used for set value
+#define RULE_MATCH_REMOVE_HDR_GTPU_IPV4             0x00
+#define RULE_MATCH_REMOVE_HDR_GTPU_IPV6             0x01
+#define RULE_MATCH_REMOVE_HDR_UDP_IPV4              0x02
+#define RULE_MATCH_REMOVE_HDR_UDP_IPV6              0x03
+#define RULE_MATCH_REMOVE_HDR_NO_REMOVE             0x06
+// Values for remove_hdr (1 << Origin "Outer Header Removal" value + 4), used for packet handle
+#define RULE_MATCH_REMOVE_HDR_COOKED_UNSPEC         0x00
+#define RULE_MATCH_REMOVE_HDR_COOKED_GTPU_IPV4      0x10
+#define RULE_MATCH_REMOVE_HDR_COOKED_GTPU_IPV6      0x20
+#define RULE_MATCH_REMOVE_HDR_COOKED_UDP_IPV4       0x40
+#define RULE_MATCH_REMOVE_HDR_COOKED_UDP_IPV6       0x80
 
 /**
  * Matching entries translated from PDR
  */
 typedef struct rule_match_s {
     uint16_t                id;
-    rule_match_ipv4_hdr_t   outer_ipv4;
-    rule_match_gtp_hdr_t    gtp;
-    rule_match_ipv4_hdr_t   inner_ipv4;
+    uint32_t                precedence;
 
-    // TODO: Support ULCL
-    /*
-    rule_match_l4port_hdr_t src_port_range;
-    rule_match_l4port_hdr_t dst_port_range;
-    */
+    uint8_t                 remove_hdr;
+
+    // Based matching value, don't filter if the value is 0
+    rte_be32_t              ue_ipv4;
+    rte_be32_t              upf_ipv4;
+    rte_be32_t              teid;
 
     uint32_t                action_id;
+    rule_action_t           *action;
+
+    // Accelerate to find which PDR the packet belong to
+    struct rule_match_s     *next_id;
+    struct rule_match_s     *next_ipv4;
+    struct rule_match_s     *next_teid;
 } rule_match_t;
 
 int rule_init(uint8_t with_locks);
 
-// TODO: Migrate from old version, it should be re-written to another version
-int rule_match_set_temprary(uint16_t id, rte_be32_t teid_in, rte_be32_t ue_ipv4, uint32_t action_id);
+int rule_match_find_by_teid(mbuf_network_info_t *info, rule_match_t **data);
+
+int rule_match_find_by_ipv4(mbuf_network_info_t *info, rule_match_t **data);
+
+int rule_action_find_by_id(uint32_t id, rule_action_t **data);
+
+int rule_register_ipv4_hash(rule_match_t *rule);
+
+int rule_register_teid_hash(rule_match_t *rule);
+
+int rule_deregister_ipv4_hash(rule_match_t *rule);
+
+int rule_deregister_teid_hash(rule_match_t *rule);
+
+void rule_match_dump_table(TraceLevel trace_level);
+
+void rule_action_dump_table(TraceLevel trace_level);
 
 // TODO: Migrate from old version, it should be re-written to another version
-int rule_action_set_temprary(uint32_t id, rte_be32_t next_ipv4, rte_be32_t teid_out, rte_be16_t port);
+int rule_match_create_by_config(uint16_t id, uint8_t remove_hdr, rte_be32_t teid_in, rte_be32_t ue_ipv4, uint32_t action_id);
+
+// TODO: Migrate from old version, it should be re-written to another version
+int rule_action_create_by_config(uint32_t id, uint8_t dst_int, rte_be16_t desp, rte_be32_t teid, rte_be32_t peer_ipv4);
 
 #endif /* __DPDK_GTP_GW_RULE_H__ */

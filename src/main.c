@@ -14,8 +14,9 @@
 #include "node.h"
 #include "stats.h"
 #include "app.h"
-#include "pkt_process.h"
-#include "gtp_process.h"
+#include "pkt_parser.h"
+#include "pkt_processor.h"
+#include "rule.h"
 
 /* GLOBALS */
 volatile uint8_t keep_running = 1;
@@ -64,12 +65,12 @@ static __rte_always_inline int pkt_handler(void *arg)
         // Prefetch others packets and process packets
         for (nb_pkt_proc = 0; nb_pkt_proc < nb_rx - RX_PREFETCH_OFFSET; nb_pkt_proc++) {
             rte_prefetch0(rte_pktmbuf_mtod(pkt[nb_pkt_proc + RX_PREFETCH_OFFSET], void *));
-            process_frame_mbuf(pkt[nb_pkt_proc], interface);
+            parse_frame_mbuf(pkt[nb_pkt_proc], interface);
         }
 
         // Process remaining packets
         for (; nb_pkt_proc < nb_rx; nb_pkt_proc++) {
-            process_frame_mbuf(pkt[nb_pkt_proc], interface);
+            parse_frame_mbuf(pkt[nb_pkt_proc], interface);
         }
     }
 
@@ -81,9 +82,13 @@ static __rte_always_inline int pkt_handler(void *arg)
 static __rte_always_inline void show_dpdk_gtp_gw_all_info(void)
 {
     logger(LOG_APP, L_INFO, "Show current DPDK GTP GW information \n\n");
-    ether_dump_interface(L_INFO);
+    interface_dump(L_INFO);
     logger_s(LOG_APP, L_INFO, "\n");
     arp_dump_table(L_INFO);
+    logger_s(LOG_APP, L_INFO, "\n");
+    rule_match_dump_table(L_INFO);
+    logger_s(LOG_APP, L_INFO, "\n");
+    rule_action_dump_table(L_INFO);
     logger_s(LOG_APP, L_INFO, "\n");
 }
 
@@ -137,7 +142,7 @@ int main(int argc, char **argv)
     // Launch thread lcores
     interface_t *interface_it = NULL;
     unsigned int lcore = RTE_MAX_LCORE;
-    for (int i = -1; (interface_it = ether_get_next_interface(i)) && (lcore = rte_get_next_lcore(i, 0, 0)) != RTE_MAX_LCORE; i++) {
+    for (int i = -1; (interface_it = interface_get_next(i)) && (lcore = rte_get_next_lcore(i, 0, 0)) != RTE_MAX_LCORE; i++) {
         // Skip the first lcore
         lcore = rte_get_next_lcore(lcore, 0, 0);
         logger(LOG_APP, L_INFO, "\n Starting packet handler %d at lcore %d \n", interface_it->id, lcore);

@@ -50,14 +50,16 @@ APP = gtpgw
 # All source are stored in SRCS-y
 SRC_DIR = $(abspath $(shell pwd)/..)/src
 LIB_DIR = $(SRC_DIR)/lib
+NET_DIR = $(SRC_DIR)/netstack
 
-CFLAGS += -I${LIB_DIR}
-LDFLAGS += -L$(LIB_DIR)
+CFLAGS += -I$(LIB_DIR) -I$(NET_DIR)
+LDFLAGS += -L$(LIB_DIR) -L$(NET_DIR)
 
 SRCS-y := $(LIB_DIR)/logger.c $(LIB_DIR)/pktbuf.c \
           $(SRC_DIR)/netstack/arp.c $(SRC_DIR)/netstack/ether.c \
           $(SRC_DIR)/node.c $(SRC_DIR)/stats.c $(SRC_DIR)/config.c \
-          $(SRC_DIR)/main.c
+          $(SRC_DIR)/rule.c $(SRC_DIR)/interface.c $(SRC_DIR)/arp_table.c \
+          $(SRC_DIR)/app.c $(SRC_DIR)/main.c
 
 CFLAGS += -std=gnu99 -g -O0 $(DEFINE_FLAGS)
 # CFLAGS += -std=gnu99 -g -O3 $(DEFINE_FLAGS)

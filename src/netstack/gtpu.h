@@ -16,7 +16,7 @@
 #define GTP1_MSG_TPDU             0xFF
 
 static __rte_always_inline void gtpu_header_set_inplace(struct rte_gtp_hdr *gtp_hdr,
-        uint8_t flag, uint8_t type, uint16_t len, uint32_t teid)
+        uint8_t ext_flag, uint8_t type, uint16_t len, uint32_t teid)
 {
     /* Bits 8  7  6  5  4  3  2  1
      *    +--+--+--+--+--+--+--+--+
@@ -24,7 +24,7 @@ static __rte_always_inline void gtpu_header_set_inplace(struct rte_gtp_hdr *gtp_
      *    +--+--+--+--+--+--+--+--+
      *     0  0  1  1  0  0  0  0
      */
-    gtp_hdr->gtp_hdr_info = 0x30 | flag;
+    gtp_hdr->gtp_hdr_info = 0x30 | ext_flag;
     gtp_hdr->msg_type = type;
     gtp_hdr->plen = rte_cpu_to_be_16(len);
     gtp_hdr->teid = rte_cpu_to_be_32(teid);

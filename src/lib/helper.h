@@ -5,6 +5,8 @@
 #include <rte_common.h>
 #include <rte_ethdev.h>
 
+#include "logger.h"
+
 static __rte_always_inline void
 print_rte_ipv4(rte_be32_t addr4)
 {
@@ -50,6 +52,14 @@ static __rte_always_inline int xchar_to_int(const char xchar)
         return xchar - 'a' + 10;
     else
         return -1;
+}
+
+/**
+ * Check if target IPv4 is in the specific subnet
+ */
+static __rte_always_inline int in_ipv4_subnet(rte_be32_t target_ipv4, rte_be32_t ifa_ipv4, rte_be32_t ifa_mask)
+{
+    return !((target_ipv4 ^ ifa_ipv4) & ifa_mask);
 }
 
 /**

@@ -10,6 +10,9 @@
 #include <rte_jhash.h>
 
 #include "helper.h"
+#include "ether.h"
+#include "interface.h"
+#include "arp_table.h"
 #include "app.h"
 #include "rule.h"
 
@@ -50,7 +53,7 @@ static int load_interface_entries(struct rte_cfgfile *file, const char *section_
     struct rte_cfgfile_entry entries[32];
 
     rte_be32_t ipv4 = 0;
-    uint8_t gtp_type = 0;
+    uint8_t type = 0;
 
     ret = rte_cfgfile_section_entries(file, section_name, entries, 32);
     port_num = str_to_int(section_name + strlen(GTP_CFG_TAG_INTF));
@@ -60,11 +63,23 @@ static int load_interface_entries(struct rte_cfgfile *file, const char *section_
 
         if (STRCMP("ipv4", entries[j].name) == 0) {
             inet_pton(AF_INET, entries[j].value, &ipv4);
-        } else if (STRCMP("type", entries[j].name) == 0) {
-            gtp_type = (STRCMP("GTPU", entries[j].value) == 0) ? CFG_VAL_GTPU : 0xff;
-        // } else if (STRCMP("index", entries[j].name) == 0) {
-        //     app_config.gtp_ports[intf_idx].pkt_index = atoi(entries[j].value);
-        } else {
+        }
+        else if (STRCMP("type", entries[j].name) == 0) {
+            if (STRCMP("GTPU", entries[j].value) == 0)
+                type = INTERFACE_TYPE_GTPU;
+            else if (STRCMP("N6", entries[j].value) == 0)
+                type = INTERFACE_TYPE_N6;
+            else if (STRCMP("N3", entries[j].value) == 0)
+                type = INTERFACE_TYPE_N3;
+            else if (STRCMP("N9", entries[j].value) == 0)
+                type = INTERFACE_TYPE_N3;
+            else {
+                printf("\n ERROR: unexpected interface type with value %s\n", entries[j].value);
+                fflush(stdout);
+                return -1;
+            }
+        }
+        else {
             printf("\n ERROR: unexpected entry %s with value %s\n",
                     entries[j].name, entries[j].value);
             fflush(stdout);
@@ -72,7 +87,7 @@ static int load_interface_entries(struct rte_cfgfile *file, const char *section_
         }
     } /* iterate entries */
 
-    return ether_add_interface(port_num, ipv4, gtp_type);
+    return interface_add(port_num, ipv4, type);
 }
 
 static int load_tunnel_entries(struct rte_cfgfile *file, const char *section_name)
@@ -105,16 +120,36 @@ static int load_tunnel_entries(struct rte_cfgfile *file, const char *section_nam
         }
     } /* iterate entries */
 
-    ret = rule_action_set_temprary(id, peer_ipv4, teid_out, rte_cpu_to_be_32(2152));
+    uint8_t uplink_id = id * 2 + 1;
+    // Uplink FAR with no extra outer header creation, so set the third param as unspec and don't care the forth and fifth
+    ret = rule_action_create_by_config(uplink_id, RULE_ACTION_DST_INT_ACCESS, RULE_ACTION_OUTER_HDR_DESP_UNSPEC, 0, 0);
     if (ret) {
-        printf("\n ERROR: cannot add rule action %u\n", id);
+        printf("\n ERROR: cannot add uplink rule action %u\n", id);
         fflush(stdout);
         return -1;
     }
 
-    ret = rule_match_set_temprary(id, teid_in, ue_ipv4, id);
+    // Uplink PDR matches with TEID and UE IP
+    ret = rule_match_create_by_config(uplink_id, RULE_MATCH_REMOVE_HDR_GTPU_IPV4, teid_in, 0, uplink_id);
     if (ret) {
-        printf("\n ERROR: cannot add rule match %u\n", id);
+        printf("\n ERROR: cannot add uplink rule match %u\n", id);
+        fflush(stdout);
+        return -1;
+    }
+
+    uint8_t downlink_id = id * 2 + 2;
+    // Downlink FAR with outer header creation
+    ret = rule_action_create_by_config(downlink_id, RULE_ACTION_DST_INT_CORE, RULE_ACTION_OUTER_HDR_DESP_GTPU_IPV4, teid_out, peer_ipv4);
+    if (ret) {
+        printf("\n ERROR: cannot add downlink rule action %u\n", id);
+        fflush(stdout);
+        return -1;
+    }
+
+    // Downlink PDR matched with UE IP
+    ret = rule_match_create_by_config(downlink_id, RULE_MATCH_REMOVE_HDR_NO_REMOVE, 0, ue_ipv4, downlink_id);
+    if (ret) {
+        printf("\n ERROR: cannot add downlink rule match %u\n", id);
         fflush(stdout);
         return -1;
     }

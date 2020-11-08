@@ -3,8 +3,9 @@
 #include <rte_hash.h>
 
 #include "ether.h"
+#include "interface.h"
+#include "arp_table.h"
 #include "rule.h"
-#include "arp.h"
 
 static app_ctx_t app_ctx = {0};
 
@@ -20,7 +21,7 @@ uint8_t app_get_disp_stats(void)
 
 int app_init(int with_locks)
 {
-    if (ether_interface_init(with_locks))
+    if (interface_init(with_locks))
         rte_exit(EXIT_FAILURE, "\n ERROR: cannot init ethernet interface\n");
 
     // Initialize hash for packet match & action
