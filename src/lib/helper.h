@@ -75,7 +75,7 @@ static __rte_always_inline void logger_ipv4(rte_be32_t ipv4, TraceLevel trace_le
 /**
  * Convert IPv4 address from big endian to xx.xx.xx.xx and output with printf_dbg.
  */
-static __rte_always_inline void print_dbg_ipv4(rte_be32_t ipv4)
+static __rte_always_inline void print_dbg_ipv4(__attribute__((unused)) rte_be32_t ipv4)
 {
     printf_dbg("%u.%u.%u.%u",
          (ipv4 & 0xff), ((ipv4 >> 8) & 0xff),
@@ -98,7 +98,7 @@ static __rte_always_inline void logger_mac(struct rte_ether_addr *mac, TraceLeve
 /**
  * Convert MAC address from 48bits Ethernet address to xx:xx:xx:xx:xx:xx and output with printf_dbg.
  */
-static __rte_always_inline void printf_dbg_mac(struct rte_ether_addr *mac)
+static __rte_always_inline void print_dbg_mac(__attribute__((unused)) struct rte_ether_addr *mac)
 {
     int i;
     for (i = 0; i < RTE_ETHER_ADDR_LEN - 1; i++) {

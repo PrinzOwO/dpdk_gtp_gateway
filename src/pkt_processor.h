@@ -46,7 +46,7 @@ static __rte_always_inline int process_frame_and_send(struct rte_mbuf *m, mbuf_n
     }
     else {
         printf_dbg(" with dst mac ");
-        printf_dbg_mac(&network_info->eth_hdr->d_addr);
+        print_dbg_mac(&network_info->eth_hdr->d_addr);
     }
 
     rte_ether_addr_copy(&network_info->eth_hdr->s_addr, &interface_get_this(out_int)->mac);

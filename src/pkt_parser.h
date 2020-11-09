@@ -140,9 +140,9 @@ static __rte_always_inline void parse_frame_mbuf(struct rte_mbuf *m, interface_t
     struct rte_ether_hdr *eth_hdr = network_info.eth_hdr = rte_pktmbuf_mtod(m, struct rte_ether_hdr *);
     printf_dbg("\n [RX] Port #%u ", interface->id);
     printf_dbg("Ether d_addr: ");
-    printf_dbg_mac(&eth_hdr->d_addr);
+    print_dbg_mac(&eth_hdr->d_addr);
     printf_dbg(", s_addr: ");
-    printf_dbg_mac(&eth_hdr->s_addr);
+    print_dbg_mac(&eth_hdr->s_addr);
 
     // TODO: Ether transport operation here, please create another to handle
     // ......
