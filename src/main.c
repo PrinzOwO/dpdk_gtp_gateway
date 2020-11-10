@@ -14,9 +14,8 @@
 #include "node.h"
 #include "stats.h"
 #include "app.h"
-#include "pkt_parser.h"
-#include "pkt_processor.h"
-#include "rule.h"
+#include "gtpu_processor.h"
+#include "n6_processor.h"
 
 /* GLOBALS */
 volatile uint8_t keep_running = 1;
@@ -39,6 +38,9 @@ static __rte_always_inline int pkt_handler(void *arg)
     unsigned int lcore_id = rte_lcore_id();
     unsigned int socket_id = rte_lcore_to_socket_id(lcore_id);
     uint8_t port_id = interface->id;
+
+    void (*pkt_handler)(struct rte_mbuf *m, interface_t *interface) =
+            (interface->type == INTERFACE_TYPE_GTPU ? gtpu_processor : n6_processor);
 
     // TODO: if mempool is per port ignore the below
     // mbuf_pool_tx = numa_node_info[socket_id].tx[0];
@@ -65,12 +67,12 @@ static __rte_always_inline int pkt_handler(void *arg)
         // Prefetch others packets and process packets
         for (nb_pkt_proc = 0; nb_pkt_proc < nb_rx - RX_PREFETCH_OFFSET; nb_pkt_proc++) {
             rte_prefetch0(rte_pktmbuf_mtod(pkt[nb_pkt_proc + RX_PREFETCH_OFFSET], void *));
-            parse_frame_mbuf(pkt[nb_pkt_proc], interface);
+            pkt_handler(pkt[nb_pkt_proc], interface);
         }
 
         // Process remaining packets
         for (; nb_pkt_proc < nb_rx; nb_pkt_proc++) {
-            parse_frame_mbuf(pkt[nb_pkt_proc], interface);
+            pkt_handler(pkt[nb_pkt_proc], interface);
         }
     }
 

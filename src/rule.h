@@ -7,7 +7,6 @@
 #include <pktbuf.h>
 
 #include "interface.h"
-#include "pkt.h"
 
 // Values for apply_action
 #define RULE_ACTION_APPLY_ACTION_UPSPEC             0x00
@@ -87,9 +86,9 @@ typedef struct rule_match_s {
 
 int rule_init(uint8_t with_locks);
 
-int rule_match_find_by_teid(mbuf_network_info_t *info, rule_match_t **data);
+int rule_match_find_by_teid(uint32_t teid, rule_match_t **data);
 
-int rule_match_find_by_ipv4(mbuf_network_info_t *info, rule_match_t **data);
+int rule_match_find_by_ipv4(rte_be32_t ipv4, rule_match_t **data);
 
 int rule_action_find_by_id(uint32_t id, rule_action_t **data);
 

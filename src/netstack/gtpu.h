@@ -29,3 +29,11 @@ static __rte_always_inline void gtpu_header_set_inplace(struct rte_gtp_hdr *gtp_
     gtp_hdr->plen = rte_cpu_to_be_16(len);
     gtp_hdr->teid = rte_cpu_to_be_32(teid);
 }
+
+/**
+ * Output src and dst mac in ethernet hdr with printf_dbg.
+ */
+static __rte_always_inline void print_dbg_gtp_hdr(__attribute__((unused)) struct rte_gtp_hdr *gtp_hdr)
+{
+    printf_dbg(" GTP version %u, msg_type 0x%02x, teid %u", (gtp_hdr->gtp_hdr_info >> 5), gtp_hdr->msg_type, rte_be_to_cpu_32(gtp_hdr->teid));
+}

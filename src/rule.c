@@ -3,12 +3,12 @@
 #include <rte_jhash.h>
 #include <rte_hash.h>
 #include <rte_malloc.h>
+#include <rte_ip.h>
 #include <rte_gtp.h>
 
 #include "param.h"
 #include "logger.h"
-#include "helper.h"
-#include "pktbuf.h"
+#include "ip.h"
 
 struct rte_hash *rule_id_hash = NULL;
 struct rte_hash *teid_in_hash = NULL;
@@ -66,15 +66,17 @@ int rule_init(uint8_t with_locks)
     return 0;
 }
 
-int rule_match_find_by_teid(mbuf_network_info_t *info, rule_match_t **data)
+int rule_match_find_by_teid(uint32_t teid, rule_match_t **rule)
 {
     int ret;
-    rule_match_t *existed_rule = NULL;
-    if ((ret = rte_hash_lookup_data(teid_in_hash, &info->gtp_hdr->teid, (void **) &existed_rule)) < 0) {
-        printf_dbg(" Cannot find the rule matching with TEID #%u \n", info->gtp_hdr->teid);
+    // rule_match_t *existed_rule = NULL;
+    if ((ret = rte_hash_lookup_data(teid_in_hash, &teid, (void **) rule)) < 0) {
+        printf_dbg(" Cannot find the rule matching with TEID #%u \n", teid);
         return ret;
     }
 
+    return ret;
+/* TODO: Test for throughput
     for (; existed_rule; existed_rule = existed_rule->next_teid) {
         if (existed_rule->upf_ipv4)
             if (existed_rule->upf_ipv4 != info->ipv4_hdr->dst_addr)
@@ -84,33 +86,37 @@ int rule_match_find_by_teid(mbuf_network_info_t *info, rule_match_t **data)
             if (existed_rule->ue_ipv4 != info->origin.ipv4_hdr->src_addr)
             continue;
 
-        *data = existed_rule;
+        rule = existed_rule;
         return ret;
     }
 
     return -ENOENT;
+*/
 }
 
-int rule_match_find_by_ipv4(mbuf_network_info_t *info, rule_match_t **data)
+int rule_match_find_by_ipv4(rte_be32_t ipv4, rule_match_t **rule)
 {
     int ret;
-    rule_match_t *existed_rule = NULL;
-    if ((ret = rte_hash_lookup_data(ue_ipv4_hash, &info->ipv4_hdr->dst_addr, (void **) &existed_rule)) < 0) {
+    // rule_match_t *existed_rule = NULL;
+    if ((ret = rte_hash_lookup_data(ue_ipv4_hash, &ipv4, (void **) rule)) < 0) {
         printf_dbg(" Cannot find the rule matching with UE IPv4 ");
-        print_dbg_ipv4(info->ipv4_hdr->dst_addr);
+        print_dbg_ipv4(ipv4);
         printf_dbg("\n");
 
         return ret;
     }
 
+    return ret;
+/* TODO: Test for throughput
     for (; existed_rule; existed_rule = existed_rule->next_ipv4) {
         // TODO: another field to matching
 
-        *data = existed_rule;
+        data = existed_rule;
         return ret;
     }
 
     return -ENOENT;
+*/
 }
 
 int rule_action_find_by_id(uint32_t id, rule_action_t **data)

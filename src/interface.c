@@ -7,8 +7,10 @@
 #include <rte_ethdev.h>
 
 #include "logger.h"
-#include "helper.h"
 #include "param.h"
+#include "pktbuf.h"
+#include "ether.h"
+#include "ip.h"
 
 uint8_t         interface_count = 0;
 interface_t     interface_ports[MAX_NUM_OF_INTERFACES] = {0};

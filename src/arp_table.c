@@ -7,12 +7,13 @@
 #include <rte_jhash.h>
 #include <rte_ether.h>
 #include <rte_arp.h>
+#include <rte_ethdev.h>
 
-#include "helper.h"
 #include "pktbuf.h"
 #include "param.h"
 #include "ether.h"
 #include "arp.h"
+#include "ip.h"
 
 static const char *arp_state_str[] = {"FREE", "PENDING", "RESOLVED", "PERMANENT"};
 static struct rte_hash *arp_table = NULL; // [rte_be32_t ipv4_addr] = (arp_entry_t *arp_entry)
