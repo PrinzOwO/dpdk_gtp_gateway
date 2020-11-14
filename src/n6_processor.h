@@ -23,8 +23,7 @@ extern pkt_stats_t port_pkt_stats[GTP_CFG_MAX_PORTS];
  *   - < 0 if packet processes failed, need to free this packet from caller
  */
 static __rte_always_inline int process_n6(struct rte_mbuf *m, interface_t *interface, struct rte_ipv4_hdr *ipv4_hdr)
-{  
-    int ret;
+{
     int out_int = interface->id ^ 1;
 
     rule_match_t *rule_match = NULL;
@@ -39,17 +38,24 @@ static __rte_always_inline int process_n6(struct rte_mbuf *m, interface_t *inter
     switch(rule_action->apply_action) {
         case RULE_ACTION_APPLY_ACTION_FORW:
             printf_dbg(" , need to forward");
-            if (unlikely((ret = process_outer_hdr_removal(m, rule_match, ipv4_hdr)) < 0)) {
-                printf_dbg(", ERROR: cannot handle outer hdr removal");
-                return ret;
-            }
 
-            if (unlikely((ret = process_outer_hdr_creation(m, rule_action, out_int)) < 0)) {
-                printf_dbg(", ERROR: cannot handle outer hdr creation");
-                return ret;
-            }
+            process_outer_hdr_removal_macro(rule_match->remove_hdr,
+                    process_outer_hdr_removal_none_macro(m, break),
+                    /* N6 ingress port don't support GTP-U decap */,
+                    return -EPROTONOSUPPORT
+            );
 
-            return process_egress_inplace(m, interface, out_int);
+            struct rte_ether_hdr *eth_hdr;
+            struct rte_udp_hdr *udp_hdr;
+            struct rte_gtp_hdr *gtp_hdr;
+            uint16_t payload_len;
+            process_outer_hdr_creation_macro(rule_action->outer_hdr_info.desp,
+                process_outer_hdr_creation_gtpu_ipv4_macro(m, eth_hdr, ipv4_hdr, udp_hdr, gtp_hdr, payload_len, rule_action, out_int, break),
+                process_outer_hdr_creation_nono_macro(m, eth_hdr, break),
+                return -EPROTONOSUPPORT
+            );
+
+            process_egress_marco(m, interface, eth_hdr, ipv4_hdr, out_int, return 0);
         case RULE_ACTION_APPLY_ACTION_DROP:
             printf_dbg(" , need to drop");
             rte_pktmbuf_free(m);
@@ -75,23 +81,21 @@ static __rte_always_inline void n6_processor(struct rte_mbuf *m, interface_t *in
     if (unlikely(rte_pktmbuf_data_len(m) < RTE_ETHER_HDR_LEN + sizeof(struct rte_ipv4_hdr)))
         goto FREE_PKT_MBUF;
 
-    int ret;
+    int offset;
 
     // Process frame
-    struct rte_ether_hdr *eth_hdr =NULL;
-    int offset = parse_frame_mbuf(m, interface, &eth_hdr);
+    struct rte_ether_hdr *eth_hdr = NULL;
+    parse_frame_mbuf_marco(m, interface, eth_hdr);
+    offset = RTE_ETHER_HDR_LEN;
 
     struct rte_ipv4_hdr *ipv4_hdr = NULL;
     switch (rte_be_to_cpu_16(eth_hdr->ether_type)) {
         // Order of ether_type in switch case using happening frequency
         case RTE_ETHER_TYPE_IPV4:
             printf_dbg(";");
-            if (unlikely((ret = parse_pkt_mbuf(m, interface, offset, &ipv4_hdr)) < 0)) {
-                printf_dbg(" Warning: cannot handle IPv4 packet \n");
-                goto FREE_PKT_MBUF;
-            }
 
-            offset += ret;
+            parse_pkt_mbuf_macro(m, interface, eth_hdr, ipv4_hdr, goto FREE_PKT_MBUF);
+            offset += sizeof(struct rte_ipv4_hdr);
             break;
         case RTE_ETHER_TYPE_ARP:
             if (unlikely(arp_in(m, interface))) {
