@@ -29,12 +29,21 @@
 /* DEFINES */
 #define GTP_CFG_FILE        "gtp_config.ini"
 #define GTP_CFG_MAX_KEYLEN  15
+
 #define GTP_CFG_TAG_INTF    "INTF_"
 #define GTP_CFG_MAX_PORTS   10
+
 #define GTP_CFG_TAG_TUNNEL  "TUNNEL_"
 #define GTP_CFG_MAX_TUNNELS 100
-#define GTP_CFG_TAG_ARP  "ARP_"
-#define GTP_CFG_MAX_ARPS 100
+
+#define GTP_CFG_TAG_ARP     "ARP_"
+#define GTP_CFG_MAX_ARPS    100
+
+#define GTP_CFG_TAG_PDR     "PDR_"
+#define GTP_CFG_MAX_PDRS    100
+
+#define GTP_CFG_TAG_FAR     "FAR_"
+#define GTP_CFG_MAX_FARS    100
 
 #define GTP_MAX_NUMANODE    4
 #define GTP_MAX_LCORECOUNT  32
