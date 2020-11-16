@@ -124,7 +124,7 @@ int rule_action_find_by_id(uint32_t id, rule_action_t **data)
     return rte_hash_lookup_data(action_id_hash, &id, (void **) data);
 }
 
-int rule_register_ipv4_hash(rule_match_t *rule)
+static int rule_register_ipv4_hash(rule_match_t *rule)
 {
     int ret;
     rule_match_t *existed_rule = NULL;
@@ -163,7 +163,7 @@ int rule_register_ipv4_hash(rule_match_t *rule)
     return ret;
 }
 
-int rule_register_teid_hash(rule_match_t *rule)
+static int rule_register_teid_hash(rule_match_t *rule)
 {
     int ret;
     rule_match_t *existed_rule = NULL;
@@ -201,7 +201,7 @@ int rule_register_teid_hash(rule_match_t *rule)
     return ret;
 }
 
-int rule_deregister_ipv4_hash(rule_match_t *rule)
+static int rule_deregister_ipv4_hash(rule_match_t *rule)
 {
     int ret;
     rule_match_t *existed_rule = NULL;
@@ -222,7 +222,7 @@ int rule_deregister_ipv4_hash(rule_match_t *rule)
         rte_hash_del_key(ue_ipv4_hash, &rule->ue_ipv4);
         rte_hash_add_key_data(ue_ipv4_hash, &existed_rule->next_ipv4->ue_ipv4, existed_rule->next_ipv4);
         rule->next_ipv4 = NULL;
-        return ret;
+        return 0;
     }
 
     for (; existed_rule->next_ipv4; existed_rule = existed_rule->next_ipv4) {
@@ -230,7 +230,7 @@ int rule_deregister_ipv4_hash(rule_match_t *rule)
             printf_dbg(" Delete PDR #%u after PDR #%u", rule->id, existed_rule->id);
             existed_rule->next_ipv4 = rule->next_ipv4;
             rule->next_ipv4 = NULL;
-            return ret;
+            return 0;
         }
     }
 
@@ -241,7 +241,7 @@ NOTFOUND:
     return -ENOENT;
 }
 
-int rule_deregister_teid_hash(rule_match_t *rule)
+static int rule_deregister_teid_hash(rule_match_t *rule)
 {
     int ret;
     rule_match_t *existed_rule = NULL;
@@ -261,7 +261,7 @@ int rule_deregister_teid_hash(rule_match_t *rule)
         rte_hash_del_key(teid_in_hash, &rule->teid);
         rte_hash_add_key_data(teid_in_hash, &existed_rule->next_teid->teid, existed_rule->next_teid);
         rule->next_teid = NULL;
-        return ret;
+        return 0;
     }
 
     for (; existed_rule->next_teid; existed_rule = existed_rule->next_teid) {
@@ -269,7 +269,7 @@ int rule_deregister_teid_hash(rule_match_t *rule)
             printf_dbg(" Delete PDR #%u after PDR #%u", rule->id, existed_rule->id);
             existed_rule->next_teid = rule->next_teid;
             rule->next_teid = NULL;
-            return ret;
+            return 0;
         }
     }
 
@@ -277,6 +277,147 @@ NOTFOUND:
     logger(LOG_GTP, L_WARN, "ERROR: PDR #%u with teid #%u", rule->id, rule->teid);
     logger_s(LOG_GTP, L_WARN, " is not existed in teid hash table\n");
     return -ENOENT;
+}
+
+int rule_match_register(rule_match_t *rule)
+{
+    if (!rule || !rule->id) {
+        logger(LOG_GTP, L_WARN, "ERROR: cannot register PDR with NULL pointer or id with zero \n");
+        return -ENOENT;
+    }
+
+    int ret;
+
+    // Check FAR in PDR is existed
+    if ((ret = rule_action_find_by_id(rule->action_id, &rule->action)) < 0) {
+        logger(LOG_GTP, L_WARN, "ERROR: cannot create PDR #%u with non-existed FAR #%u \n", rule->id, rule->action_id);
+        return -EEXIST;
+    }
+
+    rule_match_t *exised_rule;
+    if ((ret = rte_hash_lookup_data(rule_id_hash, &rule->id, (void **) &exised_rule)) != -ENOENT) {
+        if (ret > 0) {
+            logger(LOG_GTP, L_WARN, "ERROR: cannot create existed PDR #%u \n", rule->id);
+            return -EEXIST;
+        }
+        else {
+            logger(LOG_GTP, L_WARN, "ERROR: cannot create PDR #%u with invalid parameter \n", rule->id);
+            return ret;
+        }
+    }
+
+    if ((ret = rte_hash_add_key_data(rule_id_hash, &rule->id, rule))) {
+        logger(LOG_GTP, L_WARN,
+                    "ERROR: cannot add new key-value <%u, %p> into rule_id_hash\n",
+                    rule->id, rule);
+        return ret;
+    }
+
+    // With teid & regist to teid_in_hash function
+    printf_dbg("\n Insert PDR #%d with ", rule->id);
+    if (rule->teid) {
+        printf_dbg("teid #%u into GTP-U hash table \n", rule->teid);
+
+        if ((ret = rule_register_teid_hash(rule)) < 0) {
+            logger(LOG_GTP, L_WARN,
+                    "ERROR: cannot add PDR #%u with teid #%u into GTP-U hash table\n",
+                    rule->id, rule->teid);
+            return ret;
+        }
+    }
+    else {
+        print_dbg_ipv4(rule->ue_ipv4);
+        printf_dbg(" into GTP-U hash table \n");
+
+        if ((ret = rule_register_ipv4_hash(rule)) < 0) {
+            logger(LOG_GTP, L_WARN, "ERROR: cannot add PDR #%u with ", rule->id);
+            logger_ipv4(rule->ue_ipv4, L_WARN);
+            logger_s(LOG_GTP, L_WARN, " into GTP-U hash table\n");
+            return ret;
+        }
+    }
+
+    return 0;
+}
+
+int rule_match_deregister(uint16_t id)
+{
+    if (!id) {
+        logger(LOG_GTP, L_WARN, "ERROR: cannot deregister PDR id with zero \n");
+        return -ENOENT;
+    }
+
+    int ret;
+    rule_match_t *existed_rule;
+    if ((ret = rte_hash_lookup_data(rule_id_hash, &id, (void **) &existed_rule)) < 0) {
+        logger(LOG_GTP, L_WARN, "ERROR: cannot deregister PDR #%u \n", id);
+        return ret;
+    }
+
+    if (existed_rule->next_ipv4) {
+        if (rule_deregister_ipv4_hash(existed_rule))
+            logger(LOG_GTP, L_WARN, "ERROR: cannot deregister PDR #%u in ipv4_hash \n", id);
+    }
+
+    if (existed_rule->next_teid) {
+        if (rule_deregister_teid_hash(existed_rule))
+            logger(LOG_GTP, L_WARN, "ERROR: cannot deregister PDR #%u in teid_hash \n", id);
+    }
+
+    rte_hash_del_key(rule_id_hash, &existed_rule->id);
+    existed_rule->next_id = NULL;
+
+    return 0;
+}
+
+int rule_action_register(rule_action_t *rule)
+{
+    if (!rule || !rule->id) {
+        logger(LOG_GTP, L_WARN, "ERROR: cannot register FAR with NULL pointer or id with zero \n");
+        return -ENOENT;
+    }
+
+    int ret;
+
+    rule_action_t *exised_rule;
+    if ((ret = rte_hash_lookup_data(action_id_hash, &rule->id, (void **) &exised_rule)) != -ENOENT) {
+        if (ret > 0) {
+            logger(LOG_GTP, L_WARN, "ERROR: cannot create existed FAR #%u \n", rule->id);
+            return -EEXIST;
+        }
+        else {
+            logger(LOG_GTP, L_WARN, "ERROR: cannot create FAR #%u with invalid parameter \n", rule->id);
+            return ret;
+        }
+    }
+
+    if ((ret = rte_hash_add_key_data(action_id_hash, &rule->id, rule))) {
+        logger(LOG_GTP, L_WARN,
+                    "ERROR: cannot add new key-value <%u, %p> into action_id_hash\n",
+                    rule->id, rule);
+        return ret;
+    }
+
+    return 0;
+}
+
+int rule_action_deregister(uint32_t id)
+{
+    if (!id) {
+        logger(LOG_GTP, L_WARN, "ERROR: cannot register FAR id with zero \n");
+        return -ENOENT;
+    }
+
+    int ret;
+    rule_action_t *existed_rule;
+    if ((ret = rte_hash_lookup_data(action_id_hash, &id, (void **) &existed_rule)) < 0) {
+        logger(LOG_GTP, L_WARN, "ERROR: cannot deregister FAR #%u \n", id);
+        return ret;
+    }
+
+    rte_hash_del_key(action_id_hash, &existed_rule->id);
+
+    return 0;
 }
 
 static const char *remove_hdr_str[] = {"GTP-U/UDP/IPv4", "GTP-U/UDP/IPv6", "UDP/IPv4", "UDP/IPv6"};
@@ -409,7 +550,7 @@ void rule_action_dump_table(TraceLevel trace_level)
     }
 }
 
-int rule_match_create_by_config(uint16_t id, uint8_t remove_hdr, rte_be32_t teid_in, rte_be32_t ue_ipv4, uint32_t action_id)
+int rule_match_create_by_config(uint16_t id, uint8_t remove_hdr, uint32_t teid_in, rte_be32_t ue_ipv4, uint32_t action_id)
 {
     int ret;
     rule_match_t *rule = NULL;
@@ -432,22 +573,27 @@ int rule_match_create_by_config(uint16_t id, uint8_t remove_hdr, rte_be32_t teid
         }
     }
 
-    if (!(rule = rte_zmalloc("Temprary rule match", sizeof(rule_match_t), 0)))
+    if (!(rule = rule_match_zmalloc()))
         rte_exit(EXIT_FAILURE, "\n ERROR: cannot alloc memory for rule matching\n");
-        
-    rule->id = id;
-    rule->precedence = 32;
 
-    rule->remove_hdr = (1 << (remove_hdr + 4));
+    rule_match_set_id(rule, id);
+    rule_match_set_precedence(rule, 32);
 
-    rule->teid = teid_in;
-    rule->ue_ipv4 = ue_ipv4;
+    rule_match_set_remove_hdr(rule, remove_hdr);
 
-    rule->action_id = action_id;
+    rule_match_set_teid(rule, teid_in);
+    rule_match_set_ue_ipv4(rule, ue_ipv4);
+
+    rule_match_set_action_id(rule, action_id);
+
     rule->action = action;
 
-    if (rte_hash_add_key_data(rule_id_hash, &rule->id, rule))
-        rte_exit(EXIT_FAILURE, "\n ERROR: cannot add new key-value into rule_id_hash\n");
+    if (rte_hash_add_key_data(rule_id_hash, &rule->id, rule)) {
+        logger(LOG_GTP, L_WARN,
+                    "ERROR: cannot add new key-value <%u, %p> into rule_id_hash\n",
+                    id, rule);
+        goto FREE_RULE;
+    }
 
     // With teid & regist to teid_in_hash function
     printf_dbg("\n Insert PDR #%d with ", id);
@@ -458,7 +604,7 @@ int rule_match_create_by_config(uint16_t id, uint8_t remove_hdr, rte_be32_t teid
             logger(LOG_GTP, L_WARN,
                     "ERROR: cannot add PDR #%u with teid #%u into GTP-U hash table\n",
                     id, rule->teid);
-            return ret;
+            goto FREE_RULE;
         }
     }
     else {
@@ -469,11 +615,15 @@ int rule_match_create_by_config(uint16_t id, uint8_t remove_hdr, rte_be32_t teid
             logger(LOG_GTP, L_WARN, "ERROR: cannot add PDR #%u with ", id);
             logger_ipv4(rule->ue_ipv4, L_WARN);
             logger_s(LOG_GTP, L_WARN, " into GTP-U hash table\n");
-            return ret;
+            goto FREE_RULE;
         }
     }
 
     return 0;
+
+FREE_RULE:
+    rule_match_free(rule);
+    return ret;
 }
 
 int rule_action_create_by_config(uint32_t id, uint8_t dst_int, rte_be16_t desp, rte_be32_t teid, rte_be32_t peer_ipv4)
@@ -493,20 +643,28 @@ int rule_action_create_by_config(uint32_t id, uint8_t dst_int, rte_be16_t desp, 
         }
     }
 
-    if (!(rule = rte_zmalloc("Temprary rule match", sizeof(rule_action_t), 0)))
+    if (!(rule = rule_action_zmalloc()))
         rte_exit(EXIT_FAILURE, "\n ERROR: cannot alloc memory for rule matching\n");
 
-    rule->id = id;
-    rule->apply_action = RULE_ACTION_APPLY_ACTION_FORW;
-    rule->dst_int = dst_int;
+    rule_action_set_id(rule, id);
+    rule_action_set_apply_action(rule, RULE_ACTION_APPLY_ACTION_FORW);
+    rule_action_set_dst_int(rule, dst_int);
 
-    rule->outer_hdr_info.desp = desp;
-    rule->outer_hdr_info.teid = teid;
-    rule->outer_hdr_info.peer_ipv4 = peer_ipv4;
-    rule->outer_hdr_info.peer_port = rte_cpu_to_be_16(2152);
+    rule_action_set_outer_hdr_desp(rule, desp);
+    rule_action_set_outer_hdr_teid(rule, teid);
+    rule_action_set_outer_hdr_ipv4(rule, peer_ipv4);
+    rule_action_set_outer_hdr_port(rule, 2152);
 
-    if (rte_hash_add_key_data(action_id_hash, &rule->id, rule))
-        rte_exit(EXIT_FAILURE, "\n ERROR: cannot add new key-value into rule_id_hash\n");
+    if (rte_hash_add_key_data(action_id_hash, &rule->id, rule)) {
+        logger(LOG_GTP, L_WARN,
+                    "ERROR: cannot add new key-value <%u, %p> into action_id_hash\n",
+                    id, rule);
+        goto FREE_RULE;
+    }
 
     return 0;
+
+FREE_RULE:
+    rule_action_free(rule);
+    return ret;
 }

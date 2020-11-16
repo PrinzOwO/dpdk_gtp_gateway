@@ -48,6 +48,25 @@ typedef struct rule_action_s {
     } outer_hdr_info;
 } rule_action_t;
 
+#define rule_action_zmalloc() rte_zmalloc("rule action in rule_match_zmalloc", sizeof(rule_action_t), 0)
+
+#define rule_action_free(rule) rte_free(rule)
+
+#define rule_action_set_id(rule, id_num) rule->id = (id_num)
+
+#define rule_action_set_apply_action(rule, ap_ac) rule->apply_action = (ap_ac)
+
+#define rule_action_set_dst_int(rule, d_i) rule->dst_int = (d_i)
+
+#define rule_action_set_outer_hdr_desp(rule, d) rule->outer_hdr_info.desp = (d)
+
+#define rule_action_set_outer_hdr_teid(rule, teid_out) rule->outer_hdr_info.teid = rte_cpu_to_be_32(teid_out)
+
+#define rule_action_set_outer_hdr_ipv4(rule, ipv4) rule->outer_hdr_info.peer_ipv4 = (ipv4)
+#define rule_action_set_outer_hdr_ipv4_str(rule, ipv4_str) inet_pton(AF_INET, (ipv4_str), &rule->outer_hdr_info.peer_ipv4)
+
+#define rule_action_set_outer_hdr_port(rule, port) rule->outer_hdr_info.peer_port = rte_cpu_to_be_16(port)
+
 // Values for origin remove_hdr, used for set value
 #define RULE_MATCH_REMOVE_HDR_GTPU_IPV4             0x00
 #define RULE_MATCH_REMOVE_HDR_GTPU_IPV6             0x01
@@ -84,6 +103,26 @@ typedef struct rule_match_s {
     struct rule_match_s     *next_teid;
 } rule_match_t;
 
+#define rule_match_zmalloc() rte_zmalloc("rule match in rule_match_zmalloc", sizeof(rule_match_t), 0)
+
+#define rule_match_free(rule) rte_free(rule)
+
+#define rule_match_set_id(rule, id_num) rule->id = (id_num)
+
+#define rule_match_set_precedence(rule, pcd) rule->precedence = (pcd)
+
+#define rule_match_set_remove_hdr(rule, rm_hdr) rule->remove_hdr = (1 << ((rm_hdr) + 4))
+
+#define rule_match_set_ue_ipv4(rule, ipv4) rule->ue_ipv4 = (ipv4)
+#define rule_match_set_ue_ipv4_str(rule, ipv4_str) inet_pton(AF_INET, (ipv4_str), &rule->ue_ipv4)
+
+#define rule_match_set_upf_ipv4(rule, ipv4) rule->upf_ipv4 = (ipv4)
+#define rule_match_set_upf_ipv4_str(rule, ipv4_str) inet_pton(AF_INET, (ipv4_str), &rule->upf_ipv4)
+
+#define rule_match_set_teid(rule, teid_in) rule->teid = rte_cpu_to_be_32(teid_in)
+
+#define rule_match_set_action_id(rule, id_num) rule->action_id = (id_num)
+
 int rule_init(uint8_t with_locks);
 
 int rule_match_find_by_teid(uint32_t teid, rule_match_t **data);
@@ -92,20 +131,20 @@ int rule_match_find_by_ipv4(rte_be32_t ipv4, rule_match_t **data);
 
 int rule_action_find_by_id(uint32_t id, rule_action_t **data);
 
-int rule_register_ipv4_hash(rule_match_t *rule);
+int rule_match_register(rule_match_t *rule);
 
-int rule_register_teid_hash(rule_match_t *rule);
+int rule_match_deregister(uint16_t id);
 
-int rule_deregister_ipv4_hash(rule_match_t *rule);
+int rule_action_register(rule_action_t *rule);
 
-int rule_deregister_teid_hash(rule_match_t *rule);
+int rule_action_deregister(uint32_t id);
 
 void rule_match_dump_table(TraceLevel trace_level);
 
 void rule_action_dump_table(TraceLevel trace_level);
 
 // TODO: Migrate from old version, it should be re-written to another version
-int rule_match_create_by_config(uint16_t id, uint8_t remove_hdr, rte_be32_t teid_in, rte_be32_t ue_ipv4, uint32_t action_id);
+int rule_match_create_by_config(uint16_t id, uint8_t remove_hdr, uint32_t teid_in, rte_be32_t ue_ipv4, uint32_t action_id);
 
 // TODO: Migrate from old version, it should be re-written to another version
 int rule_action_create_by_config(uint32_t id, uint8_t dst_int, rte_be16_t desp, rte_be32_t teid, rte_be32_t peer_ipv4);
