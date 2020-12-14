@@ -13,5 +13,7 @@
 
 // GTP Tunnel
 #define GTP_CTX_MAX_TUNNELS 0xFF
+#define GTP_CTX_MAX_ACL_PER_PDR 0x01
+#define GTP_CTX_MAX_ONE_KIND_OF_ACL_RULE 0x08
 
 #endif /* __DPDK_GTP_GW_PARAM_H__ */

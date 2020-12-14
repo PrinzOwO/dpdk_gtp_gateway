@@ -106,13 +106,17 @@ static int load_tunnel_entries(struct rte_cfgfile *file, const char *section_nam
 
         if (STRCMP("teid_in", entries[j].name) == 0) {
             teid_in = atoi(entries[j].value);
-        } else if (STRCMP("teid_out", entries[j].name) == 0) {
+        }
+        else if (STRCMP("teid_out", entries[j].name) == 0) {
             teid_out = atoi(entries[j].value);
-        } else if (STRCMP("ue_ipv4", entries[j].name) == 0) {
+        }
+        else if (STRCMP("ue_ipv4", entries[j].name) == 0) {
             inet_pton(AF_INET, entries[j].value, &ue_ipv4);
-        } else if (STRCMP("ran_ipv4", entries[j].name) == 0) {
+        }
+        else if (STRCMP("ran_ipv4", entries[j].name) == 0) {
             inet_pton(AF_INET, entries[j].value, &peer_ipv4);
-        } else {
+        }
+        else {
             printf("\n ERROR: unexpected entry %s with value %s\n",
                 entries[j].name, entries[j].value);
             fflush(stdout);
@@ -191,7 +195,7 @@ static int load_pdr_entries(struct rte_cfgfile *file, const char *section_name)
             rule_match_set_teid(rule, atoi(entries[j].value));
         }
         else if (STRCMP("sdf_filter", entries[j].name) == 0) {
-            // TODO:
+            rule_match_set_sdf_filter(rule, entries[j].value);
         }
         else {
             printf("\n ERROR: unexpected entry %s with value %s \n",

@@ -2,10 +2,13 @@
 #define __DPDK_GTP_GW_RULE_H__
 
 // TODO: thread safe
+#include <string.h>
 
 #include <rte_byteorder.h>
-#include <pktbuf.h>
+#include <rte_ip.h>
+#include <rte_gtp.h>
 
+#include "pktbuf.h"
 #include "interface.h"
 
 // Values for apply_action
@@ -94,6 +97,18 @@ typedef struct rule_match_s {
     rte_be32_t              upf_ipv4;
     rte_be32_t              teid;
 
+    // Advanced matching
+    char                    sdf_filter_str[0x40];   // Only record original data
+    struct {
+        uint8_t             proto;
+        rte_be32_t          src_addr;
+        rte_be32_t          src_mask;
+        rte_be32_t          dst_addr;
+        rte_be32_t          dst_mask;
+        uint32_t            *src_port_range;
+        uint32_t            *dst_port_range;
+    } sdf_filter;
+
     uint32_t                action_id;
     rule_action_t           *action;
 
@@ -105,7 +120,7 @@ typedef struct rule_match_s {
 
 #define rule_match_zmalloc() rte_zmalloc("rule match in rule_match_zmalloc", sizeof(rule_match_t), 0)
 
-#define rule_match_free(rule) rte_free(rule)
+#define rule_match_free(rule) rte_free(rule);
 
 #define rule_match_set_id(rule, id_num) rule->id = (id_num)
 
@@ -123,11 +138,14 @@ typedef struct rule_match_s {
 
 #define rule_match_set_action_id(rule, id_num) rule->action_id = (id_num)
 
+#define rule_match_set_sdf_filter(rule, desp) \
+    strncpy(rule->sdf_filter_str, desp, ((sizeof(rule->sdf_filter_str) - 1) > strlen(desp) ? strlen(desp) : 0))
+
 int rule_init(uint8_t with_locks);
 
-int rule_match_find_by_teid(uint32_t teid, rule_match_t **data);
+int rule_match_find_by_teid(struct rte_ipv4_hdr *ipv4_hdr, struct rte_gtp_hdr *gtp_hdr, struct rte_ipv4_hdr *inner_ipv4_hdr, rule_match_t **rule);
 
-int rule_match_find_by_ipv4(rte_be32_t ipv4, rule_match_t **data);
+int rule_match_find_by_ipv4(struct rte_ipv4_hdr *ipv4_hdr, rule_match_t **rule);
 
 int rule_action_find_by_id(uint32_t id, rule_action_t **data);
 

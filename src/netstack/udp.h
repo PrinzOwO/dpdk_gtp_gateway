@@ -5,11 +5,11 @@
 #include <rte_udp.h>
 
 static __rte_always_inline void udp_header_set_inplace(struct rte_udp_hdr *udp_hdr,
-        rte_be16_t src_port, rte_be16_t dst_port, rte_be16_t len)
+        rte_be16_t src_port, rte_be16_t dst_port, uint16_t len)
 {
     udp_hdr->src_port = src_port;
     udp_hdr->dst_port = dst_port;
-    udp_hdr->dgram_len = len;
+    udp_hdr->dgram_len = rte_cpu_to_be_16(len);
     udp_hdr->dgram_cksum = 0; // No UDP checksum check
 }
 

@@ -1,12 +1,42 @@
 #ifndef __DPDK_GTP_GW_IP_H__
 #define __DPDK_GTP_GW_IP_H__
 
+#include <stdint.h>
+
 #include <rte_byteorder.h>
 #include <rte_ip.h>
 
 #include "logger.h"
 
-static __rte_always_inline void ipv4_header_set_inplace(struct rte_ipv4_hdr *ipv4_hdr, rte_be32_t src_addr, rte_be32_t dst_addr, rte_be16_t len)
+#define uint8_num_to_mask(num_type_mask) (uint8_t) (((uint16_t) UINT16_MAX) << (8 - (num_type_mask)))
+/**
+ * Convert net mask from number to 32 bits.
+ */
+static __rte_always_inline uint32_t ipv4_subnet_num_to_mask(uint8_t num_type_mask)
+{
+    uint32_t ret = 0, one_block;
+    for (int i = 0; i < 4 && num_type_mask > 0; i++, num_type_mask -= 8) {
+        one_block = (num_type_mask >= 8 ? 8 : num_type_mask);
+        ret += uint8_num_to_mask(one_block) << (i * 8);
+    }
+    return ret;
+}
+
+/**
+ * Convert net mask from 32 bits to number.
+ */
+static __rte_always_inline int ipv4_subnet_mask_to_num(rte_be32_t bit_type_mask)
+{
+    /* TODO: implement it
+    int num = 0;
+    for (; !(bit_type_mask & 1); bit_type_mask >>= 1)
+        num++;
+    return (32 - num);
+    */
+   return bit_type_mask;
+}
+
+static __rte_always_inline void ipv4_header_set_inplace(struct rte_ipv4_hdr *ipv4_hdr, rte_be32_t src_addr, rte_be32_t dst_addr, uint16_t len)
 {
     ipv4_hdr->version_ihl = RTE_IPV4_VHL_DEF;
     ipv4_hdr->type_of_service = 0;
@@ -30,10 +60,7 @@ static __rte_always_inline void ipv4_header_reply_set_inplace(struct rte_ipv4_hd
 /**
  * Check if target IPv4 is in the specific subnet
  */
-static __rte_always_inline int in_ipv4_subnet(rte_be32_t target_ipv4, rte_be32_t ifa_ipv4, rte_be32_t ifa_mask)
-{
-    return !((target_ipv4 ^ ifa_ipv4) & ifa_mask);
-}
+#define in_ipv4_subnet(target_ipv4, ifa_ipv4, ifa_mask) (!((target_ipv4 ^ ifa_ipv4) & ifa_mask))
 
 /**
  * Convert IPv4 address from big endian to xx.xx.xx.xx and output with logger_s.

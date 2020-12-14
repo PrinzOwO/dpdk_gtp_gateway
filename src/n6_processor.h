@@ -28,7 +28,7 @@ static __rte_always_inline int process_n6(struct rte_mbuf *m, interface_t *inter
 
     rule_match_t *rule_match = NULL;
     rule_action_t *rule_action = NULL;
-    if (unlikely(rule_match_find_by_ipv4(ipv4_hdr->dst_addr, &rule_match) < 0)) {
+    if (unlikely(rule_match_find_by_ipv4(ipv4_hdr, &rule_match) < 0)) {
         printf_dbg(" Do not match any PDR");
         return -ENOENT;
     }

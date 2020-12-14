@@ -30,7 +30,7 @@ static __rte_always_inline int process_gtpu(struct rte_mbuf *m, interface_t *int
 
     rule_match_t *rule_match = NULL;
     rule_action_t *rule_action = NULL;
-    if (unlikely(rule_match_find_by_teid(gtp_hdr->teid, &rule_match) < 0)) {
+    if (unlikely(rule_match_find_by_teid(ipv4_hdr, gtp_hdr, inner_ipv4_hdr, &rule_match) < 0)) {
         printf_dbg(" Do not match any PDR");
         return -ENOENT;
     }
@@ -208,12 +208,16 @@ static __rte_always_inline void gtpu_processor(struct rte_mbuf *m, interface_t *
             }
 
             inner_ipv4_hdr = rte_pktmbuf_mtod_offset(m, struct rte_ipv4_hdr *, offset + ret);
+            printf_dbg("; inner");
+            print_dbg_ipv4_hdr_addr(inner_ipv4_hdr);
             break;
         default:
             port_pkt_stats[interface->id].non_udp += 1;
             printf_dbg(", next protocol: 0x%02x", ipv4_hdr->next_proto_id);
             goto FREE_PKT_MBUF;
     }
+
+    printf_dbg("\n");
 
     if (unlikely(process_gtpu(m, interface, ipv4_hdr, gtp_hdr, inner_ipv4_hdr) < 0))
         goto FREE_PKT_MBUF;
