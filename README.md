@@ -10,11 +10,11 @@ DPDK implementation of GTPv1 user plane gateway.
 # Build and Run
 Environment
 - OS: Ubuntu 18.04 LTS
-- DPDK: 19.11.2 LTS
+- DPDK: 19.11.3 LTS
 
 Copy and edit config
 ```bash
-cp gtp_config.example.ini gtp_config.ini
+cp sample_config/gtp_config.example.ini gtp_config.ini
 ```
 
 Make and run the program with EAL parameters
