@@ -86,7 +86,7 @@ extern pkt_stats_t port_pkt_stats[GTP_CFG_MAX_PORTS];
  * @suss_handle_expr: expr for successful handling
  */
 #define process_outer_hdr_removal_gtpu_ipv4_macro(m, inner_ipv4_hdr, ipv4_hdr, suss_handle_expr) \
-    case RULE_MATCH_REMOVE_HDR_COOKED_GTPU_IPV4: \
+    case RULE_PDR_REMOVE_HDR_COOKED_GTPU_IPV4: \
         printf_dbg(", remove GTP-U, UDP, IPv4 and ethernet hdr"); \
         ipv4_hdr = (struct rte_ipv4_hdr *) rte_pktmbuf_adj(m, (uint8_t *) inner_ipv4_hdr - rte_pktmbuf_mtod(m, uint8_t *)); \
         suss_handle_expr;
@@ -96,7 +96,7 @@ extern pkt_stats_t port_pkt_stats[GTP_CFG_MAX_PORTS];
  * @suss_handle_expr: expr for successful handling
  */
 #define process_outer_hdr_removal_none_macro(m, suss_handle_expr) \
-    case RULE_MATCH_REMOVE_HDR_COOKED_UNSPEC: \
+    case RULE_PDR_REMOVE_HDR_COOKED_UNSPEC: \
         printf_dbg(", remove ethernet hdr"); \
         rte_pktmbuf_adj(m, RTE_ETHER_HDR_LEN); \
         suss_handle_expr;
@@ -122,24 +122,24 @@ extern pkt_stats_t port_pkt_stats[GTP_CFG_MAX_PORTS];
  * @ipv4_hdr: struct rte_ipv4_hdr *
  * @udp_hdr: struct rte_udp_hdr *
  * @gtp_hdr: struct rte_udp_hdr *
- * @rule_action: rule_action_t *
+ * @far: rule_far_t *
  * @out_int: interface id
  * @suss_handle_expr: expr for successful handling
  */
-#define process_outer_hdr_creation_gtpu_ipv4_macro(m, eth_hdr, ipv4_hdr, udp_hdr, gtp_hdr, payload_len, rule_action, out_int, suss_handle_expr) \
-    case RULE_ACTION_OUTER_HDR_DESP_GTPU_IPV4: \
+#define process_outer_hdr_creation_gtpu_ipv4_macro(m, eth_hdr, ipv4_hdr, udp_hdr, gtp_hdr, payload_len, far, out_int, suss_handle_expr) \
+    case RULE_FAR_OUTER_HDR_DESP_GTPU_IPV4: \
         printf_dbg(", create outer gtp-u, udp and ipv4 hdr"); \
         eth_hdr = (struct rte_ether_hdr *) rte_pktmbuf_prepend(m, \
                 RTE_ETHER_GTP_HLEN + sizeof(struct rte_ipv4_hdr) + RTE_ETHER_HDR_LEN); \
         /* ethernet hdr will be handled at send function */ \
         ipv4_header_set_inplace((ipv4_hdr = (void *) &eth_hdr[1]), \
-                interface_get_this(out_int)->ipv4, rule_action->outer_hdr_info.peer_ipv4, \
+                interface_get_this(out_int)->ipv4, far->outer_hdr_info.peer_ipv4, \
                 (payload_len = rte_pktmbuf_data_len(m) - RTE_ETHER_HDR_LEN)); \
         udp_header_set_inplace((udp_hdr = (void *) &ipv4_hdr[1]), \
-                0x6808, rule_action->outer_hdr_info.peer_port, \
+                0x6808, far->outer_hdr_info.peer_port, \
                 (payload_len -= sizeof(struct rte_ipv4_hdr))); \
         gtpu_header_set_inplace((gtp_hdr = (void *) &udp_hdr[1]), \
-                0, 0xff, (payload_len -= sizeof(struct rte_udp_hdr)), rule_action->outer_hdr_info.teid); \
+                0, 0xff, (payload_len -= sizeof(struct rte_udp_hdr)), far->outer_hdr_info.teid); \
         suss_handle_expr;
 
 /**
@@ -148,7 +148,7 @@ extern pkt_stats_t port_pkt_stats[GTP_CFG_MAX_PORTS];
  * @suss_handle_expr: expr for successful handling
  */
 #define process_outer_hdr_creation_nono_macro(m, eth_hdr, suss_handle_expr) \
-    case RULE_ACTION_OUTER_HDR_DESP_UNSPEC: \
+    case RULE_FAR_OUTER_HDR_DESP_UNSPEC: \
         printf_dbg(", don't create outer hdr"); \
         eth_hdr = (struct rte_ether_hdr *) rte_pktmbuf_prepend(m, sizeof(struct rte_ether_hdr)); \
         /* ethernet hdr will be handled at send function */ \

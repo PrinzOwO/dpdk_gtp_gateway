@@ -126,7 +126,7 @@ static int load_tunnel_entries(struct rte_cfgfile *file, const char *section_nam
 
     uint8_t uplink_id = id * 2 + 1;
     // Uplink FAR with no extra outer header creation, so set the third param as unspec and don't care the forth and fifth
-    ret = rule_action_create_by_config(uplink_id, RULE_ACTION_DST_INT_ACCESS, RULE_ACTION_OUTER_HDR_DESP_UNSPEC, 0, 0);
+    ret = rule_far_create_by_config(uplink_id, RULE_FAR_DST_INT_ACCESS, RULE_FAR_OUTER_HDR_DESP_UNSPEC, 0, 0);
     if (ret) {
         printf("\n ERROR: cannot add uplink rule action %u\n", id);
         fflush(stdout);
@@ -134,7 +134,7 @@ static int load_tunnel_entries(struct rte_cfgfile *file, const char *section_nam
     }
 
     // Uplink PDR matches with TEID and UE IP
-    ret = rule_match_create_by_config(uplink_id, RULE_MATCH_REMOVE_HDR_GTPU_IPV4, teid_in, 0, uplink_id);
+    ret = rule_match_create_by_config(uplink_id, RULE_PDR_REMOVE_HDR_GTPU_IPV4, teid_in, 0, uplink_id);
     if (ret) {
         printf("\n ERROR: cannot add uplink rule match %u\n", id);
         fflush(stdout);
@@ -143,7 +143,7 @@ static int load_tunnel_entries(struct rte_cfgfile *file, const char *section_nam
 
     uint8_t downlink_id = id * 2 + 2;
     // Downlink FAR with outer header creation
-    ret = rule_action_create_by_config(downlink_id, RULE_ACTION_DST_INT_CORE, RULE_ACTION_OUTER_HDR_DESP_GTPU_IPV4, teid_out, peer_ipv4);
+    ret = rule_far_create_by_config(downlink_id, RULE_FAR_DST_INT_CORE, RULE_FAR_OUTER_HDR_DESP_GTPU_IPV4, teid_out, peer_ipv4);
     if (ret) {
         printf("\n ERROR: cannot add downlink rule action %u\n", id);
         fflush(stdout);
@@ -151,7 +151,7 @@ static int load_tunnel_entries(struct rte_cfgfile *file, const char *section_nam
     }
 
     // Downlink PDR matched with UE IP
-    ret = rule_match_create_by_config(downlink_id, RULE_MATCH_REMOVE_HDR_NO_REMOVE, 0, ue_ipv4, downlink_id);
+    ret = rule_match_create_by_config(downlink_id, RULE_PDR_REMOVE_HDR_NO_REMOVE, 0, ue_ipv4, downlink_id);
     if (ret) {
         printf("\n ERROR: cannot add downlink rule match %u\n", id);
         fflush(stdout);
@@ -170,32 +170,34 @@ static int load_pdr_entries(struct rte_cfgfile *file, const char *section_name)
     if (!rule)
         rte_exit(EXIT_FAILURE, "\n ERROR: cannot zmalloc rule_match_t in load_pdr_entries \n");
     
+    rule_pdr_t *pdr = &rule->pdr;
+
     ret = rte_cfgfile_section_entries(file, section_name, entries, 32);
-    rule_match_set_id(rule, str_to_int(section_name + strlen(GTP_CFG_TAG_PDR)));
+    rule_pdr_set_id(pdr, str_to_int(section_name + strlen(GTP_CFG_TAG_PDR)));
 
     for (int j = 0; j < ret; j++) {
         printf("\n %15s : %-15s", entries[j].name, entries[j].value);
 
         if (STRCMP("precedence", entries[j].name) == 0) {
-            rule_match_set_precedence(rule, atoi(entries[j].value));
+            rule_pdr_set_precedence(pdr, atoi(entries[j].value));
         }
         else if (STRCMP("far_id", entries[j].name) == 0) {
-            rule_match_set_action_id(rule, atoi(entries[j].value));
+            rule_pdr_set_far_id(pdr, atoi(entries[j].value));
         }
         else if (STRCMP("outer_hdr_rm", entries[j].name) == 0) {
-            rule_match_set_remove_hdr(rule, atoi(entries[j].value));
+            rule_pdr_set_remove_hdr(pdr, atoi(entries[j].value));
         }
         else if (STRCMP("ue_ipv4", entries[j].name) == 0) {
-            rule_match_set_ue_ipv4_str(rule, entries[j].value);
+            rule_pdr_set_ue_ipv4_str(pdr, entries[j].value);
         }
         else if (STRCMP("local_ipv4", entries[j].name) == 0) {
-            rule_match_set_upf_ipv4_str(rule, entries[j].value);
+            rule_pdr_set_upf_ipv4_str(pdr, entries[j].value);
         }
         else if (STRCMP("teid_in", entries[j].name) == 0) {
-            rule_match_set_teid(rule, atoi(entries[j].value));
+            rule_pdr_set_teid(pdr, atoi(entries[j].value));
         }
         else if (STRCMP("sdf_filter", entries[j].name) == 0) {
-            rule_match_set_sdf_filter(rule, entries[j].value);
+            rule_pdr_set_sdf_filter(pdr, entries[j].value);
         }
         else {
             printf("\n ERROR: unexpected entry %s with value %s \n",
@@ -208,7 +210,7 @@ static int load_pdr_entries(struct rte_cfgfile *file, const char *section_name)
 
     if ((ret = rule_match_register(rule))) {
         printf("\n ERROR: cannot register PDR #%u \n",
-                rule->id);
+                pdr->id);
         fflush(stdout);
         goto FREE_RULE;
     }
@@ -225,28 +227,28 @@ static int load_far_entries(struct rte_cfgfile *file, const char *section_name)
     int32_t ret = -1;
     struct rte_cfgfile_entry entries[32];
 
-    rule_action_t *rule = rule_action_zmalloc();
+    rule_far_t *rule = rule_far_zmalloc();
     if (!rule)
-        rte_exit(EXIT_FAILURE, "\n ERROR: cannot zmalloc rule_action in load_far_entries \n");
+        rte_exit(EXIT_FAILURE, "\n ERROR: cannot zmalloc far in load_far_entries \n");
     
     ret = rte_cfgfile_section_entries(file, section_name, entries, 32);
-    rule_action_set_id(rule, str_to_int(section_name + strlen(GTP_CFG_TAG_FAR)));
+    rule_far_set_id(rule, str_to_int(section_name + strlen(GTP_CFG_TAG_FAR)));
 
     for (int j = 0; j < ret; j++) {
         printf("\n %15s : %-15s", entries[j].name, entries[j].value);
         if (STRCMP("action", entries[j].name) == 0) {
-            rule_action_set_apply_action(rule, atoi(entries[j].value));
+            rule_far_set_apply_action(rule, atoi(entries[j].value));
         }
         else if (STRCMP("dst_int", entries[j].name) == 0) {
-            rule_action_set_dst_int(rule, atoi(entries[j].value));
+            rule_far_set_dst_int(rule, atoi(entries[j].value));
         }
         else if (STRCMP("outer_hdr_ipv4", entries[j].name) == 0) {
-            rule_action_set_outer_hdr_desp(rule, RULE_ACTION_OUTER_HDR_DESP_GTPU_IPV4);
-            rule_action_set_outer_hdr_ipv4_str(rule, entries[j].value);
-            rule_action_set_outer_hdr_port(rule, 2152);
+            rule_far_set_outer_hdr_desp(rule, RULE_FAR_OUTER_HDR_DESP_GTPU_IPV4);
+            rule_far_set_outer_hdr_ipv4_str(rule, entries[j].value);
+            rule_far_set_outer_hdr_port(rule, 2152);
         }
         else if (STRCMP("outer_hdr_teid", entries[j].name) == 0) {
-            rule_action_set_outer_hdr_teid(rule, atoi(entries[j].value));
+            rule_far_set_outer_hdr_teid(rule, atoi(entries[j].value));
         }
         else {
             printf("\n ERROR: unexpected entry %s with value %s \n",
@@ -257,7 +259,7 @@ static int load_far_entries(struct rte_cfgfile *file, const char *section_name)
         }
     } /* iterate entries */
 
-    if ((ret = rule_action_register(rule))) {
+    if ((ret = rule_far_register(rule))) {
         printf("\n ERROR: cannot register FAR #%u \n",
                 rule->id);
         fflush(stdout);
@@ -267,7 +269,7 @@ static int load_far_entries(struct rte_cfgfile *file, const char *section_name)
     return 0;
 
 FREE_RULE:
-    rule_action_free(rule);
+    rule_far_free(rule);
     return ret;
 }
 

@@ -51,11 +51,13 @@ APP = gtpgw
 SRC_DIR = $(abspath $(shell pwd)/..)/src
 LIB_DIR = $(SRC_DIR)/lib
 NET_DIR = $(SRC_DIR)/netstack
+RULES_DIR = $(SRC_DIR)/rules
 
-CFLAGS += -I$(LIB_DIR) -I$(NET_DIR)
-LDFLAGS += -L$(LIB_DIR) -L$(NET_DIR)
+CFLAGS += -I$(LIB_DIR) -I$(NET_DIR) -I$(RULES_DIR)
+LDFLAGS += -L$(LIB_DIR) -L$(NET_DIR) -L$(RULES_DIR)
 
 SRCS-y := $(LIB_DIR)/logger.c $(LIB_DIR)/pktbuf.c \
+          $(RULES_DIR)/rule_5tuple.c $(RULES_DIR)/rule_pdr.c $(RULES_DIR)/rule_far.c \
           $(SRC_DIR)/netstack/arp.c $(SRC_DIR)/netstack/ether.c \
           $(SRC_DIR)/node.c $(SRC_DIR)/stats.c $(SRC_DIR)/config.c \
           $(SRC_DIR)/rule.c $(SRC_DIR)/interface.c $(SRC_DIR)/arp_table.c \

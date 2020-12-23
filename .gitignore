@@ -1,8 +1,7 @@
 build/
 *.o*
 
-gtp_config.ini
-gtp_config.ini.*
+gtp_config*
 
 DevDocs/
 .vscode/

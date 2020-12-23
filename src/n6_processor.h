@@ -27,19 +27,19 @@ static __rte_always_inline int process_n6(struct rte_mbuf *m, interface_t *inter
     int out_int = interface->id ^ 1;
 
     rule_match_t *rule_match = NULL;
-    rule_action_t *rule_action = NULL;
+    rule_far_t *far = NULL;
     if (unlikely(rule_match_find_by_ipv4(ipv4_hdr, &rule_match) < 0)) {
         printf_dbg(" Do not match any PDR");
         return -ENOENT;
     }
 
-    rule_action = rule_match->action;
-    printf_dbg(" ---> Match PDR #%u with FAR #%u in IPv4 hash", rule_match->id, rule_match->action_id);
-    switch(rule_action->apply_action) {
-        case RULE_ACTION_APPLY_ACTION_FORW:
+    far = rule_match->far;
+    printf_dbg(" ---> Match PDR #%u with FAR #%u in IPv4 hash", rule_match->pdr.id, rule_match->pdr.far_id);
+    switch(far->apply_action) {
+        case RULE_FAR_APPLY_ACTION_FORW:
             printf_dbg(" , need to forward");
 
-            process_outer_hdr_removal_macro(rule_match->remove_hdr,
+            process_outer_hdr_removal_macro(rule_match->pdr.remove_hdr,
                     process_outer_hdr_removal_none_macro(m, break),
                     /* N6 ingress port don't support GTP-U decap */,
                     return -EPROTONOSUPPORT
@@ -49,26 +49,26 @@ static __rte_always_inline int process_n6(struct rte_mbuf *m, interface_t *inter
             struct rte_udp_hdr *udp_hdr;
             struct rte_gtp_hdr *gtp_hdr;
             uint16_t payload_len;
-            process_outer_hdr_creation_macro(rule_action->outer_hdr_info.desp,
-                process_outer_hdr_creation_gtpu_ipv4_macro(m, eth_hdr, ipv4_hdr, udp_hdr, gtp_hdr, payload_len, rule_action, out_int, break),
+            process_outer_hdr_creation_macro(far->outer_hdr_info.desp,
+                process_outer_hdr_creation_gtpu_ipv4_macro(m, eth_hdr, ipv4_hdr, udp_hdr, gtp_hdr, payload_len, far, out_int, break),
                 process_outer_hdr_creation_nono_macro(m, eth_hdr, break),
                 return -EPROTONOSUPPORT
             );
 
             process_egress_marco(m, interface, eth_hdr, ipv4_hdr, out_int, return 0);
-        case RULE_ACTION_APPLY_ACTION_DROP:
+        case RULE_FAR_APPLY_ACTION_DROP:
             printf_dbg(" , need to drop");
             rte_pktmbuf_free(m);
             port_pkt_stats[interface->id].dropped += 1;
             return 0;
-        case RULE_ACTION_APPLY_ACTION_BUFF:
+        case RULE_FAR_APPLY_ACTION_BUFF:
             printf_dbg(" , need to buffer but not support yet");
             // TODO: temporary handle
             rte_pktmbuf_free(m);
             port_pkt_stats[interface->id].dropped += 1;
             return 0;
         default:
-            printf_dbg(" , need to %d but not support yet", rule_action->apply_action);
+            printf_dbg(" , need to %d but not support yet", far->apply_action);
             return -EPROTONOSUPPORT;
     }
 }

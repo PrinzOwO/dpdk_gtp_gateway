@@ -8,6 +8,8 @@
 
 #include "logger.h"
 
+#define ipv4_cmp2_first_is_zero_or_equal(ipv4_1, ipv4_2) (!ipv4_1 || ipv4_1 == ipv4_2)
+
 #define uint8_num_to_mask(num_type_mask) (uint8_t) (((uint16_t) UINT16_MAX) << (8 - (num_type_mask)))
 /**
  * Convert net mask from number to 32 bits.

@@ -90,7 +90,7 @@ static __rte_always_inline void show_dpdk_gtp_gw_all_info(void)
     logger_s(LOG_APP, L_INFO, "\n");
     rule_match_dump_table(L_INFO);
     logger_s(LOG_APP, L_INFO, "\n");
-    rule_action_dump_table(L_INFO);
+    rule_far_dump_table(L_INFO);
     logger_s(LOG_APP, L_INFO, "\n");
 }
 
