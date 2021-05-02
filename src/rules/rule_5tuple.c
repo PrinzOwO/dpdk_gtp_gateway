@@ -187,6 +187,7 @@ err:
     return -EINVAL;
 }
 
+#ifdef DEBUG
 int rule_5tuple_matching_debug(rule_5tuple_t *rule, struct rte_ipv4_hdr *l3_pkt)
 {
     if (!rule)
@@ -212,6 +213,7 @@ int rule_5tuple_matching_debug(rule_5tuple_t *rule, struct rte_ipv4_hdr *l3_pkt)
     
     return _rule_5tuple_matching(rule, l3_pkt);
 }
+#endif
 
 int ports_match(uint32_t *port_list, uint16_t port) {
     if (!port_list) {

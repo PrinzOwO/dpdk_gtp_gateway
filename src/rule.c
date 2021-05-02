@@ -98,10 +98,10 @@ int rule_match_find_by_teid(struct rte_ipv4_hdr *ipv4_hdr,
 
     // TODO: Test for throughput
     for (; existed_rule; existed_rule = existed_rule->next_teid) {
-        rule_pdr_dump(&existed_rule->pdr, L_INFO);
         if (rule_pdr_is_ue_ipv4(&existed_rule->pdr, inner_ipv4_hdr->src_addr) &&
                 rule_pdr_is_upf_ipv4(&existed_rule->pdr, ipv4_hdr->dst_addr) &&
                 rule_5tuple_matching(existed_rule->pdr.sdf_filter, inner_ipv4_hdr)) {
+
             *rule = existed_rule;
             return ret;
         }
@@ -125,7 +125,6 @@ int rule_match_find_by_ipv4(struct rte_ipv4_hdr *ipv4_hdr, rule_match_t **rule)
     }
 
     for (; existed_rule; existed_rule = existed_rule->next_ipv4) {
-        rule_pdr_dump(&existed_rule->pdr, L_INFO);
         if (rule_5tuple_matching(existed_rule->pdr.sdf_filter, ipv4_hdr)) {
             *rule = existed_rule;
             return ret;

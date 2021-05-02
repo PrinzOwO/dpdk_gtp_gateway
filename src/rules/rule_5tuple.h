@@ -86,12 +86,14 @@ int ports_match(uint32_t *port_list, uint16_t port);
 
 #define _rule_5tuple_matching(rule, l3_pkt) \
     ( \
-        rule && \
-        rule_5tuple_is_proto((rule), *((uint8_t *) l3_pkt + offsetof(struct rte_ipv4_hdr, next_proto_id))) && \
-        rule_5tuple_is_src_ipv4_subnet((rule), *((uint32_t *) ((uint8_t *) l3_pkt + offsetof(struct rte_ipv4_hdr, src_addr)))) && \
-        rule_5tuple_is_dst_ipv4_subnet((rule), *((uint32_t *) ((uint8_t *) l3_pkt + offsetof(struct rte_ipv4_hdr, dst_addr)))) && \
-        rule_5tuple_is_src_ports((rule), *((uint16_t *) ((uint8_t *) l3_pkt + sizeof(struct rte_ipv4_hdr) + offsetof(struct rte_udp_hdr, src_port)))) && \
-        rule_5tuple_is_dst_ports((rule), *((uint16_t *) ((uint8_t *) l3_pkt + sizeof(struct rte_ipv4_hdr) + offsetof(struct rte_udp_hdr, dst_port)))) \
+        !rule || \
+        ( \
+            rule_5tuple_is_proto((rule), *((uint8_t *) l3_pkt + offsetof(struct rte_ipv4_hdr, next_proto_id))) && \
+            rule_5tuple_is_src_ipv4_subnet((rule), *((uint32_t *) ((uint8_t *) l3_pkt + offsetof(struct rte_ipv4_hdr, src_addr)))) && \
+            rule_5tuple_is_dst_ipv4_subnet((rule), *((uint32_t *) ((uint8_t *) l3_pkt + offsetof(struct rte_ipv4_hdr, dst_addr)))) && \
+            rule_5tuple_is_src_ports((rule), *((uint16_t *) ((uint8_t *) l3_pkt + sizeof(struct rte_ipv4_hdr) + offsetof(struct rte_udp_hdr, src_port)))) && \
+            rule_5tuple_is_dst_ports((rule), *((uint16_t *) ((uint8_t *) l3_pkt + sizeof(struct rte_ipv4_hdr) + offsetof(struct rte_udp_hdr, dst_port)))) \
+        ) \
     )
 
 #ifndef DEBUG
