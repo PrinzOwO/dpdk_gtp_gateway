@@ -33,7 +33,11 @@ typedef struct rule_match_s {
 
 int rule_init(uint8_t with_locks);
 
+#ifndef ULCL
+int rule_match_find_by_teid(struct rte_gtp_hdr *gtp_hdr, rule_match_t **rule);
+#else
 int rule_match_find_by_teid(struct rte_ipv4_hdr *ipv4_hdr, struct rte_gtp_hdr *gtp_hdr, struct rte_ipv4_hdr *inner_ipv4_hdr, rule_match_t **rule);
+#endif /* ULCL */
 
 int rule_match_find_by_ipv4(struct rte_ipv4_hdr *ipv4_hdr, rule_match_t **rule);
 

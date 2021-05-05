@@ -32,6 +32,7 @@
 #######################################################
 # Uncomment the following line for debugging each packet
 # DEFINE_FLAGS += -DDEBUG
+# DEFINE_FLAGS += -DULCL
 
 #######################################################
 

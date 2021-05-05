@@ -30,7 +30,11 @@ static __rte_always_inline int process_gtpu(struct rte_mbuf *m, interface_t *int
 
     rule_match_t *rule_match = NULL;
     rule_far_t *far = NULL;
+    #ifndef ULCL
+    if (unlikely(rule_match_find_by_teid(gtp_hdr, &rule_match) < 0)) {
+    #else
     if (unlikely(rule_match_find_by_teid(ipv4_hdr, gtp_hdr, inner_ipv4_hdr, &rule_match) < 0)) {
+    #endif /* ULCL */
         printf_dbg(" Do not match any PDR");
         return -ENOENT;
     }
