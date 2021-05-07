@@ -24,7 +24,7 @@
 #include <rte_udp.h>
 #include <rte_hash.h>
 
-#include "netstack/arp.h"
+#include "arp.h"
 
 /* DEFINES */
 #define GTP_CFG_FILE        "gtp_config.ini"
