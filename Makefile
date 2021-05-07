@@ -11,8 +11,11 @@ DEPDIRS-app += lib netstack rules
 
 include $(RTE_SDK)/mk/rte.extsubdir.mk
 
+all:
+	@ln -sf app/$(RTE_TARGET)/gtpgw gtpgw
 clean:
 	@rm -rf lib/build lib/$(RTE_TARGET)
 	@rm -rf netstack/build netstack/$(RTE_TARGET)
 	@rm -rf rules/build rules/$(RTE_TARGET)
 	@rm -rf app/build app/$(RTE_TARGET)
+	@rm -f gtpgw
