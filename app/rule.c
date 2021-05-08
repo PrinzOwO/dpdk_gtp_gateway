@@ -85,12 +85,7 @@ void rule_match_dump_table(TraceLevel trace_level)
     }
 }
 
-#ifndef ULCL
-int rule_match_find_by_teid(struct rte_gtp_hdr *gtp_hdr, rule_match_t **rule)
-{
-    return rte_hash_lookup_data(teid_in_hash, &gtp_hdr->teid, (void **) rule);
-}
-#else
+#ifdef ULCL
 int rule_match_find_by_teid(struct rte_ipv4_hdr *ipv4_hdr,
         struct rte_gtp_hdr *gtp_hdr, struct rte_ipv4_hdr *inner_ipv4_hdr,
         rule_match_t **rule)
@@ -116,6 +111,11 @@ int rule_match_find_by_teid(struct rte_ipv4_hdr *ipv4_hdr,
     printf_dbg(" Cannot find the rule matching with TEID #%u \n", gtp_hdr->teid);
 
     return -ENOENT;
+}
+#else
+int rule_match_find_by_teid(struct rte_gtp_hdr *gtp_hdr, rule_match_t **rule)
+{
+    return rte_hash_lookup_data(teid_in_hash, &gtp_hdr->teid, (void **) rule);
 }
 #endif /* ULCL */
 
