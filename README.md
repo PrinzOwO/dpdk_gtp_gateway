@@ -20,7 +20,7 @@ cp sample_config/gtp_config.example.ini gtp_config.ini
 Make and run the program with EAL parameters
 ```bash
 make
-sudo ./build/gtpgw -l 0,1,2 -n 4
+sudo ./gtpgw -l 0,1,2 -n 4
 ```
 
 ### References

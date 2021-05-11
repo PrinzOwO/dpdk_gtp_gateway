@@ -1,6 +1,6 @@
 #include <assert.h>
-#include "netstack/arp.h"
-#include "netstack/ether.h"
+#include "arp.h"
+#include "ether.h"
 
 #include <rte_lcore.h>
 #include <rte_ip_frag.h>

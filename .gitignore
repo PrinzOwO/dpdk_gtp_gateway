@@ -1,5 +1,8 @@
-build/
+gtpgw
 *.o*
+build/
+**/x86_64-native-linuxapp-gcc/
+**/x86_64-native-linux-gcc/
 
 gtp_config*
 
