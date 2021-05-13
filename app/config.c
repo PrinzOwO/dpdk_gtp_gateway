@@ -311,15 +311,15 @@ static int load_arp_entries(struct rte_cfgfile *file, const char *section_name)
     return arp_add_mac(ipv4, &mac, ARP_STATE_PERMANENT);
 }
 
-int32_t load_config(void)
+int32_t load_config(const char *filename)
 {
     struct rte_cfgfile *file = NULL;
     int32_t ret;
     char **section_names = NULL;
 
-    file = rte_cfgfile_load(GTP_CFG_FILE, 0);
+    file = rte_cfgfile_load(filename, 0);
     if (file == NULL)
-        rte_exit(EXIT_FAILURE, "\n Cannot load configuration profile %s\n", GTP_CFG_FILE);
+        rte_exit(EXIT_FAILURE, "\n Cannot load configuration profile %s\n", filename);
 
     printf("\n Loading config entries:");
 

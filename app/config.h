@@ -55,6 +55,6 @@
 #define STRCMP(x, y) strcmp((const char *)x, (const char *)y)
 #define STRNCMP(x, y, n) strncmp((const char *)x, (const char *)y, n)
 
-int32_t load_config(void);
+int32_t load_config(const char *filename);
 
 #endif /*__CONFIG_H__*/
