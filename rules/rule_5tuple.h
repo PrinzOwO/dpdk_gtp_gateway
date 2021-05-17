@@ -27,8 +27,10 @@ typedef struct rule_5tuple_s {
 #define rule_5tuple_zmalloc() rte_zmalloc("rule 5-tuple", sizeof(rule_5tuple_t), 0)
 
 #define rule_5tuple_clean(rule) \
-    rte_free((rule)->src_port_range); \
-    rte_free((rule)->dst_port_range)
+    if ((rule)) { \
+        rte_free((rule)->src_port_range); \
+        rte_free((rule)->dst_port_range); \
+    }
 
 #define rule_5tuple_free(rule) \
     rule_5tuple_clean(rule); \
