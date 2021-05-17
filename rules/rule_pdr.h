@@ -72,6 +72,23 @@ typedef struct rule_pdr_s {
 #define rule_pdr_set_sdf_filter(rule, desp) \
     strncpy((rule)->sdf_filter_str, desp, ((sizeof((rule)->sdf_filter_str) - 1) > strlen(desp) ? strlen(desp) : 0))
 
+
+//  Macro used to check & copy rule_pdr_t
+#define rule_pdr_check_and_copy_val(d, s, target) if ((s)->target) (d)->target = (s)->target
+#define rule_pdr_update(d, s) \
+    rule_pdr_check_and_copy_val(d, s, id); \
+    rule_pdr_check_and_copy_val(d, s, precedence); \
+    rule_pdr_check_and_copy_val(d, s, remove_hdr); \
+    rule_pdr_check_and_copy_val(d, s, ue_ipv4); \
+    rule_pdr_check_and_copy_val(d, s, upf_ipv4); \
+    rule_pdr_check_and_copy_val(d, s, teid); \
+    rule_pdr_check_and_copy_val(d, s, far_id); \
+    if ((s)->sdf_filter_str[0]) { \
+        strncpy((d)->sdf_filter_str, (s)->sdf_filter_str, strlen((s)->sdf_filter_str)); \
+        if ((d)->sdf_filter) rule_5tuple_free((d)->sdf_filter); \
+        rule_5tuple_complie(&((d)->sdf_filter), (d)->sdf_filter_str); \
+    }
+
 // Matching function and parameter as below
 #define rule_pdr_is_ue_ipv4(rule, ipv4) ipv4_cmp2_first_is_zero_or_equal((rule)->ue_ipv4, ipv4)
 

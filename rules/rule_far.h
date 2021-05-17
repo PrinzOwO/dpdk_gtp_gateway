@@ -69,6 +69,15 @@ typedef struct rule_far_s {
 
 #define rule_far_set_outer_hdr_port(rule, port) (rule)->outer_hdr_info.peer_port = rte_cpu_to_be_16(port)
 
+
+//  Macro used to check & copy rule_far_t
+#define rule_far_check_and_copy_val(d, s, target) if ((s)->target) (d)->target = (s)->target
+#define rule_far_update(d, s) \
+    rule_far_check_and_copy_val(d, s, id); \
+    rule_far_check_and_copy_val(d, s, apply_action); \
+    rule_far_check_and_copy_val(d, s, dst_int); \
+    if ((s)->outer_hdr_info.desp) memcpy(&(d)->outer_hdr_info, &(s)->outer_hdr_info, sizeof((d)->outer_hdr_info))
+
 // Show function as below
 
 void logger_apply_action(uint8_t apply_action, TraceLevel trace_level);
