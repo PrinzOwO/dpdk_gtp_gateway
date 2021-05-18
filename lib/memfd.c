@@ -18,8 +18,8 @@ void *memfd_malloc(int *ret_fd, char *ret_filename, int filename_len)
         return NULL;
     }
 
-    if (ftruncate(*ret_fd, MAX_MEMFD_SIZE) < 0) {
-        logger(LOG_LIB, L_CRITICAL, "ftruncate failed: %s \n", strerror(errno));
+//    if (ftruncate(*ret_fd, MAX_MEMFD_SIZE) < 0) {
+    if (memfd_ftruncate(*ret_fd, MAX_MEMFD_SIZE) < 0) {
         close(*ret_fd);
         return NULL;
     }
@@ -35,4 +35,13 @@ void *memfd_malloc(int *ret_fd, char *ret_filename, int filename_len)
 void memfd_free(void *ptr)
 {
     munmap(ptr, MAX_MEMFD_SIZE);
+}
+
+int memfd_ftruncate(int fd, int file_size)
+{
+    int ret = 0;
+    if ((ret = ftruncate(fd, file_size)) < 0) {
+        logger(LOG_LIB, L_CRITICAL, "ftruncate failed: %s \n", strerror(errno));
+    }
+    return ret;
 }
