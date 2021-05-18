@@ -66,7 +66,21 @@ int interface_add(uint8_t id, rte_be32_t ipv4, uint8_t type)
                 id, avail_dev_count);
         return -1;
     }
-    
+
+    interface_t *exist_intf = NULL;
+    if (interface_find_by_id(&id, &exist_intf) >= 0) {
+        rte_hash_del_key(interface_ipv4_hash, &exist_intf->ipv4);
+
+        exist_intf->ipv4 = ipv4;
+        exist_intf->type = type;
+
+        if (rte_hash_add_key_data(interface_ipv4_hash,
+            &exist_intf->ipv4, exist_intf))
+            goto HASH_TABLE_ID_INT_REMOVE;
+
+        return 0;
+    }
+
     if (interface_count + 1 > (uint8_t) (sizeof(interface_ports) / sizeof(interface_t))) {
         logger(LOG_APP, L_CRITICAL,
                 "Number of interface in config (%d) > avail dpdk eth devices (%d).\n",

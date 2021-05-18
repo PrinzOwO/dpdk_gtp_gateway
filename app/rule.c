@@ -319,16 +319,29 @@ int rule_match_register(rule_match_t *rule)
     int ret;
     rule_pdr_t *pdr = &rule->pdr;
     // Check FAR in PDR is existed
-    if ((ret = rule_far_find_by_id(pdr->far_id, &rule->far)) < 0) {
+    if (pdr->far_id && (ret = rule_far_find_by_id(pdr->far_id, &rule->far)) < 0) {
         logger(LOG_GTP, L_WARN, "ERROR: cannot create PDR #%u with non-existed FAR #%u \n", pdr->id, pdr->far_id);
         return -EEXIST;
     }
 
-    rule_match_t *exised_rule;
-    if ((ret = rte_hash_lookup_data(rule_id_hash, &pdr->id, (void **) &exised_rule)) != -ENOENT) {
-        if (ret > 0) {
-            logger(LOG_GTP, L_WARN, "ERROR: cannot create existed PDR #%u \n", pdr->id);
-            return -EEXIST;
+    rule_match_t *existed_rule = NULL;
+    if ((ret = rte_hash_lookup_data(rule_id_hash, &pdr->id, (void **) &existed_rule)) != -ENOENT) {
+        if (ret >= 0) {
+            if (existed_rule->next_ipv4) {
+                if (rule_deregister_ipv4_hash(existed_rule))
+                    logger(LOG_GTP, L_WARN, "ERROR: cannot deregister PDR #%u in ipv4_hash \n", pdr->id);
+            }
+
+            if (existed_rule->next_teid) {
+                if (rule_deregister_teid_hash(existed_rule))
+                    logger(LOG_GTP, L_WARN, "ERROR: cannot deregister PDR #%u in teid_hash \n", pdr->id);
+            }
+            rule_pdr_update(&existed_rule->pdr, pdr);
+            existed_rule->far = rule->far;
+            rule_match_free(rule);
+            rule = existed_rule;
+
+            goto regist_to_match_hash_table;
         }
         else {
             logger(LOG_GTP, L_WARN, "ERROR: cannot create PDR #%u with invalid parameter \n", pdr->id);
@@ -349,6 +362,7 @@ int rule_match_register(rule_match_t *rule)
         goto err;
     }
 
+regist_to_match_hash_table:
     // With teid & regist to teid_in_hash function
     printf_dbg("\n Insert PDR #%d with ", pdr->id);
     if (pdr->teid) {
@@ -410,8 +424,6 @@ int rule_match_deregister(uint16_t id)
     return 0;
 }
 
-// TODO: ...
-
 int rule_far_register(rule_far_t *rule)
 {
     if (!rule || !rule->id) {
@@ -421,11 +433,13 @@ int rule_far_register(rule_far_t *rule)
 
     int ret;
 
-    rule_far_t *exised_rule;
-    if ((ret = rte_hash_lookup_data(far_id_hash, &rule->id, (void **) &exised_rule)) != -ENOENT) {
+    rule_far_t *existed_rule;
+    if ((ret = rte_hash_lookup_data(far_id_hash, &rule->id, (void **) &existed_rule)) != -ENOENT) {
         if (ret > 0) {
-            logger(LOG_GTP, L_WARN, "ERROR: cannot create existed FAR #%u \n", rule->id);
-            return -EEXIST;
+            rule_far_update(existed_rule, rule);
+            rule_far_free(rule);
+
+            return 0;
         }
         else {
             logger(LOG_GTP, L_WARN, "ERROR: cannot create FAR #%u with invalid parameter \n", rule->id);
