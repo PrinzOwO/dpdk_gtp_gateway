@@ -8,6 +8,8 @@
 
 #include "logger.h"
 #include "pktbuf.h"
+#include "unix_sock.h"
+#include "memfd.h"
 
 #include "param.h"
 #include "config.h"
@@ -121,7 +123,7 @@ int main(int argc, char **argv)
         rte_exit(EXIT_FAILURE, "\n ERROR: failed to init app \n");
 
     // Load ini config file
-    ret = load_config();
+    ret = load_config(DEFAULT_CFG_PATH);
     if (ret < 0)
         rte_exit(EXIT_FAILURE, "\n ERROR: failed to load config \n");
 
@@ -151,9 +153,32 @@ int main(int argc, char **argv)
         rte_eal_remote_launch(pkt_handler, interface_it, lcore);
     }
 
-    rte_eal_mp_wait_lcore();
+    // rte_eal_mp_wait_lcore();
 
-    // TODO: Delete when after test
+    // Communication with other program
+    int unix_fd = unix_sock_create("gtpgw_unix_sock");
+    int memfd, rcnt;
+    char filename[0xff];
+    char *buf = memfd_malloc(&memfd, filename, sizeof(filename));
+
+    const char exit_str[] = "quit";
+    while (keep_running) {
+        if ((rcnt = unix_sock_read(unix_fd, buf, MAX_MEMFD_SIZE)) > 0) {
+            memfd_ftruncate(memfd, rcnt);
+            
+            logger(LOG_APP, L_INFO, "Recv command with len %u from unix sock: \n", rcnt);
+            logger_s(LOG_APP, L_INFO, "%s", buf);
+
+            if (!strncmp(buf, exit_str, sizeof(exit_str))) {
+                sigint_handler(SIGINT);
+            }
+            else if (load_config(filename) < 0) {
+                logger(LOG_APP, L_WARN, "config load failed: \n");
+                logger_s(LOG_APP, L_WARN, "%s", buf);
+            }
+        }
+    }
+
     return 0;
 
 /*

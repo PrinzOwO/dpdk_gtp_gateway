@@ -3,6 +3,10 @@ RTE_TARGET ?= x86_64-native-linuxapp-gcc
 include $(RTE_SDK)/mk/rte.vars.mk
 
 APP = gtpgw
+DEFAULT_CFG_PATH := \"$(PWD)/gtp_config.ini\"
+
+
+CFLAGS += -D DEFAULT_CFG_PATH="$(DEFAULT_CFG_PATH)"
 
 CFLAGS += -std=gnu99 -g -O0 $(DEFINE_FLAGS) -I$(RTE_SRCDIR)
 CFLAGS += $(WERROR_FLAGS)
