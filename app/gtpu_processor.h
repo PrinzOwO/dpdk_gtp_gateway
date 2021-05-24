@@ -62,18 +62,17 @@ static __rte_always_inline int process_gtpu(struct rte_mbuf *m, interface_t *int
             }
             */
 
-            process_outer_hdr_removal_macro(rule_match->pdr.remove_hdr,
-                    process_outer_hdr_removal_gtpu_ipv4_macro(m, inner_ipv4_hdr, ipv4_hdr, break),
-                    process_outer_hdr_removal_none_macro(m, break),
+            process_outer_hdr_removal_switch_case_macro(rule_match->pdr.remove_hdr,
+                    process_outer_hdr_removal_case_gtpu_ipv4_macro(m, inner_ipv4_hdr, ipv4_hdr, break),
+                    process_outer_hdr_removal_case_none_macro(m, break),
                     return -EPROTONOSUPPORT
             );
 
             struct rte_ether_hdr *eth_hdr;
             struct rte_udp_hdr *udp_hdr;
-            uint16_t payload_len;
-            process_outer_hdr_creation_macro(far->outer_hdr_info.desp,
-                process_outer_hdr_creation_nono_macro(m, eth_hdr, break),
-                process_outer_hdr_creation_gtpu_ipv4_macro(m, eth_hdr, ipv4_hdr, udp_hdr, gtp_hdr, payload_len, far, out_int, break),
+            process_outer_hdr_creation_switch_case_macro(far->outer_hdr_info.desp,
+                process_outer_hdr_creation_case_nono_macro(m, eth_hdr, break),
+                process_outer_hdr_creation_case_gtpu_ipv4_macro(m, eth_hdr, ipv4_hdr, udp_hdr, gtp_hdr, far, out_int, break),
                 return -EPROTONOSUPPORT
             );
 
