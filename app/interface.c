@@ -20,10 +20,7 @@ struct rte_hash *interface_ipv4_hash = NULL;
 
 interface_t *interface_get_this(int now_order)
 {
-    if (likely(now_order >= 0 && now_order < interface_count))
-        return &interface_ports[now_order];
-    
-    return NULL;
+    return &interface_ports[now_order];
 }
 
 interface_t *interface_get_next(int now_order)

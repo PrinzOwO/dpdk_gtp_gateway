@@ -112,12 +112,6 @@ int rule_match_find_by_teid(struct rte_ipv4_hdr *ipv4_hdr,
 
     return -ENOENT;
 }
-#else
-int rule_match_find_by_teid(struct rte_gtp_hdr *gtp_hdr, rule_match_t **rule)
-{
-    return rte_hash_lookup_data(teid_in_hash, &gtp_hdr->teid, (void **) rule);
-}
-#endif /* ULCL */
 
 int rule_match_find_by_ipv4(struct rte_ipv4_hdr *ipv4_hdr, rule_match_t **rule)
 {
@@ -144,6 +138,17 @@ int rule_match_find_by_ipv4(struct rte_ipv4_hdr *ipv4_hdr, rule_match_t **rule)
 
     return -ENOENT;
 }
+#else
+int rule_match_find_by_teid(struct rte_gtp_hdr *gtp_hdr, rule_match_t **rule)
+{
+    return rte_hash_lookup_data(teid_in_hash, &gtp_hdr->teid, (void **) rule);
+}
+
+int rule_match_find_by_ipv4(struct rte_ipv4_hdr *ipv4_hdr, rule_match_t **rule)
+{
+    return rte_hash_lookup_data(ue_ipv4_hash, &ipv4_hdr->dst_addr, (void **) rule);
+}
+#endif /* ULCL */
 
 int rule_far_find_by_id(uint32_t id, rule_far_t **data)
 {
