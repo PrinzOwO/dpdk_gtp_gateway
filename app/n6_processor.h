@@ -112,7 +112,7 @@ static __rte_always_inline int process_n6(struct rte_mbuf *m, interface_t *inter
     m->ol_flags |= PKT_TX_IPV4 | PKT_TX_IP_CKSUM;
 
     if (likely(rte_eth_tx_burst(out_int, 0, &m, 1)))
-        return ;
+        return 0;
     return -ENOSPC;
 }
 
