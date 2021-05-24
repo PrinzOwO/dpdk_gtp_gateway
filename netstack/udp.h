@@ -4,6 +4,12 @@
 #include <rte_byteorder.h>
 #include <rte_udp.h>
 
+#define udp_header_set_inplace_macro(udp_hdr, sport, dport, len) \
+    ((struct rte_udp_hdr *) (udp_hdr))->src_port = (sport); \
+    ((struct rte_udp_hdr *) (udp_hdr))->dst_port = (dport); \
+    ((struct rte_udp_hdr *) (udp_hdr))->dgram_len = rte_cpu_to_be_16(len); \
+    ((struct rte_udp_hdr *) (udp_hdr))->dgram_cksum = 0
+
 static __rte_always_inline void udp_header_set_inplace(struct rte_udp_hdr *udp_hdr,
         rte_be16_t src_port, rte_be16_t dst_port, uint16_t len)
 {

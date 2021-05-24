@@ -15,6 +15,12 @@
 #define GTP1_MSG_END_MARKER       0xFE
 #define GTP1_MSG_TPDU             0xFF
 
+#define gtpu_header_set_inplace_macro(gtp_hdr, ext_flag, type, len, o_teid) \
+    ((struct rte_gtp_hdr *) (gtp_hdr))->gtp_hdr_info = 0x30 | (ext_flag); \
+    ((struct rte_gtp_hdr *) (gtp_hdr))->msg_type = (type); \
+    ((struct rte_gtp_hdr *) (gtp_hdr))->plen = rte_cpu_to_be_16(len); \
+    ((struct rte_gtp_hdr *) (gtp_hdr))->teid = rte_cpu_to_be_32(o_teid)
+
 static __rte_always_inline void gtpu_header_set_inplace(struct rte_gtp_hdr *gtp_hdr,
         uint8_t ext_flag, uint8_t type, uint16_t len, uint32_t teid)
 {

@@ -38,6 +38,16 @@ static __rte_always_inline int ipv4_subnet_mask_to_num(rte_be32_t bit_type_mask)
    return bit_type_mask;
 }
 
+#define ipv4_header_set_inplace_macro(ipv4_hdr, saddr, daddr, len) \
+    ((struct rte_ipv4_hdr *) (ipv4_hdr))->version_ihl = RTE_IPV4_VHL_DEF; \
+    ((struct rte_ipv4_hdr *) (ipv4_hdr))->total_length = rte_cpu_to_be_16(len); \
+    ((struct rte_ipv4_hdr *) (ipv4_hdr))->time_to_live = 64; \
+    ((struct rte_ipv4_hdr *) (ipv4_hdr))->next_proto_id = IPPROTO_UDP; \
+    ((struct rte_ipv4_hdr *) (ipv4_hdr))->src_addr = (saddr); \
+    ((struct rte_ipv4_hdr *) (ipv4_hdr))->dst_addr = (daddr); \
+    ((struct rte_ipv4_hdr *) (ipv4_hdr))->hdr_checksum = 0
+
+
 static __rte_always_inline void ipv4_header_set_inplace(struct rte_ipv4_hdr *ipv4_hdr, rte_be32_t src_addr, rte_be32_t dst_addr, uint16_t len)
 {
     ipv4_hdr->version_ihl = RTE_IPV4_VHL_DEF;
@@ -77,22 +87,20 @@ static __rte_always_inline void logger_ipv4(rte_be32_t ipv4, TraceLevel trace_le
 /**
  * Convert IPv4 address from big endian to xx.xx.xx.xx and output with printf_dbg.
  */
-static __rte_always_inline void print_dbg_ipv4(__attribute__((unused)) rte_be32_t ipv4)
-{
-    printf_dbg("%u.%u.%u.%u",
-         (ipv4 & 0xff), ((ipv4 >> 8) & 0xff),
-         ((ipv4 >> 16) & 0xff), (ipv4 >> 24));
-}
+#define print_dbg_ipv4(rte_be32_t_ptr) \
+    printf_dbg("%u.%u.%u.%u", \
+            (((struct rte_ipv4_hdr *) (rte_be32_t_ptr)) & 0xff), \
+            ((((struct rte_ipv4_hdr *) (rte_be32_t_ptr)) >> 8) & 0xff), \
+            ((((struct rte_ipv4_hdr *) (rte_be32_t_ptr)) >> 16) & 0xff), \
+            (((struct rte_ipv4_hdr *) (rte_be32_t_ptr)) >> 24))
 
 /**
  * Output src and dst ipv4 in ipv4 hdr with printf_dbg.
  */
-static __rte_always_inline void print_dbg_ipv4_hdr_addr(__attribute__((unused)) struct rte_ipv4_hdr *ipv4_hdr)
-{
-    printf_dbg(" IPv4 s_addr: ");
-    print_dbg_ipv4(ipv4_hdr->src_addr);
-    printf_dbg(", d_addr: ");
-    print_dbg_ipv4(ipv4_hdr->dst_addr);
-}
+#define print_dbg_ipv4_hdr_addr(rte_ipv4_hdr_ptr) \
+    printf_dbg(" IPv4 s_addr: "); \
+    print_dbg_ipv4(((struct rte_ipv4_hdr *) (rte_ipv4_hdr_ptr))->src_addr); \
+    printf_dbg(", d_addr: "); \
+    print_dbg_ipv4(((struct rte_ipv4_hdr *) (rte_ipv4_hdr_ptr))->dst_addr)
 
 #endif /* __DPDK_GTP_GW_IP_H__ */

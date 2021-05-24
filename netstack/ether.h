@@ -56,22 +56,22 @@ static __rte_always_inline void logger_mac(struct rte_ether_addr *mac, TraceLeve
 /**
  * Convert MAC address from 48bits Ethernet address to xx:xx:xx:xx:xx:xx and output with printf_dbg.
  */
-static __rte_always_inline void print_dbg_mac(__attribute__((unused)) struct rte_ether_addr *mac)
-{
-    printf_dbg("%02x:%02x:%02x:%02x:%02x:%02x",
-            mac->addr_bytes[0], mac->addr_bytes[1], mac->addr_bytes[2],
-            mac->addr_bytes[3], mac->addr_bytes[4], mac->addr_bytes[5]);
-}
+#define print_dbg_mac(rte_ether_addr_ptr) \
+    printf_dbg("%02x:%02x:%02x:%02x:%02x:%02x", \
+            ((struct rte_ether_addr *) (rte_ether_addr_ptr))->addr_bytes[0], \
+            ((struct rte_ether_addr *) (rte_ether_addr_ptr))->addr_bytes[1], \
+            ((struct rte_ether_addr *) (rte_ether_addr_ptr))->addr_bytes[2], \
+            ((struct rte_ether_addr *) (rte_ether_addr_ptr))->addr_bytes[3], \
+            ((struct rte_ether_addr *) (rte_ether_addr_ptr))->addr_bytes[4], \
+            ((struct rte_ether_addr *) (rte_ether_addr_ptr))->addr_bytes[5])
 
 /**
  * Output src and dst mac in ethernet hdr with printf_dbg.
  */
-static __rte_always_inline void print_dbg_ether_hdr_mac(__attribute__((unused)) struct rte_ether_hdr *eth_hdr)
-{
-    printf_dbg("Ether d_addr: ");
-    print_dbg_mac(&eth_hdr->d_addr);
-    printf_dbg(", s_addr: ");
-    print_dbg_mac(&eth_hdr->s_addr);
-}
+#define print_dbg_ether_hdr_mac(rte_ether_hdr_ptr) \
+    printf_dbg("Ether d_addr: "); \
+    print_dbg_mac(&((struct rte_ether_addr *) (rte_ether_hdr_ptr))->d_addr); \
+    printf_dbg(", s_addr: "); \
+    print_dbg_mac(&((struct rte_ether_addr *) (rte_ether_hdr_ptr))->s_addr)
 
 #endif /* __DPDK_GTP_GW_ETHER_H__ */
