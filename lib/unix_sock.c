@@ -37,6 +37,13 @@ int unix_sock_create(const char *name)
     return fd;
 }
 
+int unix_sock_destroy(int fd, const char *name)
+{
+    unlink(name);
+    close(fd);
+    return 0;
+}
+
 int unix_sock_read(int fd, void *buf, int buf_size)
 {
     return read(fd, buf, buf_size);

@@ -156,7 +156,9 @@ int main(int argc, char **argv)
     // rte_eal_mp_wait_lcore();
 
     // Communication with other program
-    int unix_fd = unix_sock_create("gtpgw_unix_sock");
+#define GTPGW_UNIX_SOCK_NAME "gtpgw_unix_sock"
+
+    int unix_fd = unix_sock_create(GTPGW_UNIX_SOCK_NAME);
     int memfd, rcnt;
     char filename[0xff];
     char *buf = memfd_malloc(&memfd, filename, sizeof(filename));
@@ -178,6 +180,8 @@ int main(int argc, char **argv)
             }
         }
     }
+
+    unix_sock_destroy(unix_fd, GTPGW_UNIX_SOCK_NAME);
 
     return 0;
 
